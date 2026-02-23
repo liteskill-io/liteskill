@@ -18,7 +18,7 @@ defmodule Liteskill.MixProject do
       releases: releases(),
       dialyzer: [
         list_unused_filters: true,
-        plt_add_apps: [:ex_unit],
+        plt_add_apps: [:ex_unit, :mix],
         excluded_paths: ["test/support"]
       ]
     ]

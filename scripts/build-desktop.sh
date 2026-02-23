@@ -119,17 +119,7 @@ mix local.rebar --force
 mix deps.get --only prod
 npm install --prefix assets
 mix compile
-
-# Run assets.deploy steps individually to skip gen.jr_prompt if missing.
-# The prompt file (priv/json_render_prompt.txt) persists across builds.
-if mix help gen.jr_prompt >/dev/null 2>&1; then
-  mix gen.jr_prompt
-else
-  log "Skipping gen.jr_prompt (task not available)"
-fi
-mix tailwind liteskill --minify
-mix esbuild liteskill --minify
-mix phx.digest
+mix assets.deploy
 
 # ---------------------------------------------------------------------------
 # Phase 4: Burrito release

@@ -29,15 +29,8 @@ MIX_ENV=prod mix deps.get --only prod
 npm install --prefix assets
 MIX_ENV=prod mix compile
 
-# Run assets.deploy steps individually to skip gen.jr_prompt if missing.
-# The prompt file (priv/json_render_prompt.txt) persists across builds.
 log "Building assets..."
-if MIX_ENV=prod mix help gen.jr_prompt >/dev/null 2>&1; then
-  MIX_ENV=prod mix gen.jr_prompt
-fi
-MIX_ENV=prod mix tailwind liteskill --minify
-MIX_ENV=prod mix esbuild liteskill --minify
-MIX_ENV=prod mix phx.digest
+MIX_ENV=prod mix assets.deploy
 
 # ---------------------------------------------------------------------------
 # Phase 3: Burrito release

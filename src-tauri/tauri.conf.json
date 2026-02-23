@@ -22,7 +22,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "targets": ["app"]
+    "targets": "all"
   },
   "identifier": "com.liteskill.desktop",
   "productName": "Liteskill",
