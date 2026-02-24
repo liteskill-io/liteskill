@@ -8,8 +8,8 @@ defmodule Liteskill.Rag.EmbeddingClient do
   - No model configured → falls back to `CohereClient` (backward compat)
   """
 
-  alias Liteskill.Rag.{CohereClient, EmbeddingRequest, OpenAIEmbeddingClient}
-  alias Liteskill.{LlmProviders, Repo, Settings}
+  alias Liteskill.Rag.{CohereClient, OpenAIEmbeddingClient, RequestLogger}
+  alias Liteskill.{LlmProviders, Settings}
 
   require Logger
 
@@ -43,11 +43,11 @@ defmodule Liteskill.Rag.EmbeddingClient do
         result = OpenAIEmbeddingClient.embed(texts, openai_opts)
         latency = System.monotonic_time(:millisecond) - start
 
-        log_request(user_id, %{
+        RequestLogger.log_request(user_id, %{
           request_type: "embed",
           model_id: model.model_id,
           input_count: length(texts),
-          token_count: estimate_token_count(texts),
+          token_count: RequestLogger.estimate_token_count(texts),
           latency_ms: latency,
           result: result
         })
@@ -98,46 +98,5 @@ defmodule Liteskill.Rag.EmbeddingClient do
   defp resolve_base_url(provider) do
     config_url = get_in(provider.provider_config || %{}, ["base_url"])
     config_url || Map.get(@default_base_urls, provider.provider_type, "https://api.openai.com/v1")
-  end
-
-  # coveralls-ignore-next-line
-  defp log_request(nil, _attrs), do: :ok
-
-  defp log_request(user_id, attrs) do
-    {status, error_message} =
-      case attrs.result do
-        {:ok, _} -> {"success", nil}
-        {:error, %{status: s}} -> {"error", "HTTP #{s}"}
-        # coveralls-ignore-next-line
-        {:error, _} -> {"error", "request_failed"}
-      end
-
-    try do
-      %EmbeddingRequest{}
-      |> EmbeddingRequest.changeset(%{
-        request_type: attrs.request_type,
-        status: status,
-        latency_ms: attrs.latency_ms,
-        input_count: attrs.input_count,
-        token_count: attrs.token_count,
-        model_id: attrs.model_id,
-        error_message: error_message,
-        user_id: user_id
-      })
-      |> Repo.insert()
-    rescue
-      # coveralls-ignore-start
-      _ ->
-        :ok
-        # coveralls-ignore-stop
-    end
-  end
-
-  defp estimate_token_count(texts) do
-    texts
-    |> Enum.map(fn text ->
-      text |> String.split(~r/\s+/) |> length() |> Kernel.*(4) |> div(3)
-    end)
-    |> Enum.sum()
   end
 end

@@ -5,8 +5,7 @@ defmodule Liteskill.Rag.CohereClient do
   Supports embed-v4 and rerank-v3.5.
   """
 
-  alias Liteskill.Rag.EmbeddingRequest
-  alias Liteskill.Repo
+  alias Liteskill.Rag.RequestLogger
 
   require Logger
 
@@ -57,11 +56,11 @@ defmodule Liteskill.Rag.CohereClient do
 
     latency = System.monotonic_time(:millisecond) - start
 
-    log_request(user_id, %{
+    RequestLogger.log_request(user_id, %{
       request_type: "embed",
       model_id: model_id,
       input_count: length(texts),
-      token_count: estimate_token_count(texts),
+      token_count: RequestLogger.estimate_token_count(texts),
       latency_ms: latency,
       result: result
     })
@@ -107,11 +106,11 @@ defmodule Liteskill.Rag.CohereClient do
 
     latency = System.monotonic_time(:millisecond) - start
 
-    log_request(user_id, %{
+    RequestLogger.log_request(user_id, %{
       request_type: "rerank",
       model_id: @rerank_model,
       input_count: length(documents),
-      token_count: estimate_token_count([query | documents]),
+      token_count: RequestLogger.estimate_token_count([query | documents]),
       latency_ms: latency,
       result: result
     })
@@ -167,45 +166,5 @@ defmodule Liteskill.Rag.CohereClient do
           region: Keyword.get(config, :bedrock_region, "us-east-1")
         }
     end
-  end
-
-  defp log_request(nil, _attrs), do: :ok
-
-  defp log_request(user_id, attrs) do
-    {status, error_message} =
-      case attrs.result do
-        {:ok, _} -> {"success", nil}
-        {:error, %{status: s, body: _}} -> {"error", "HTTP #{s}"}
-        # coveralls-ignore-next-line
-        {:error, _} -> {"error", "request_failed"}
-      end
-
-    try do
-      %EmbeddingRequest{}
-      |> EmbeddingRequest.changeset(%{
-        request_type: attrs.request_type,
-        status: status,
-        latency_ms: attrs.latency_ms,
-        input_count: attrs.input_count,
-        token_count: attrs.token_count,
-        model_id: attrs.model_id,
-        error_message: error_message,
-        user_id: user_id
-      })
-      |> Repo.insert()
-    rescue
-      # coveralls-ignore-start
-      _ ->
-        :ok
-        # coveralls-ignore-stop
-    end
-  end
-
-  defp estimate_token_count(texts) do
-    texts
-    |> Enum.map(fn text ->
-      text |> String.split(~r/\s+/) |> length() |> Kernel.*(4) |> div(3)
-    end)
-    |> Enum.sum()
   end
 end
