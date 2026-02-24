@@ -30,6 +30,32 @@ The client supports:
 - Global servers (set by admin) are available to all users
 - Servers can be shared via ACLs
 
+### SSRF Protection
+
+Server URLs are validated to prevent Server-Side Request Forgery (SSRF). By default:
+
+- Only **HTTPS** URLs are accepted
+- Private and reserved addresses are blocked (`localhost`, `127.*`, `10.*`, `172.16-31.*`, `192.168.*`, `169.254.*`, IPv6 loopback, and `host.docker.internal`)
+
+To allow private URLs (e.g. for self-hosted MCP servers), enable **Allow private MCP URLs** in server settings.
+
+### Docker Networking
+
+When running Liteskill via Docker Compose, MCP servers on the host machine are not reachable at `localhost` (which refers to the container itself). Use `host.docker.internal` instead:
+
+```
+http://host.docker.internal:4005
+```
+
+This requires two things:
+
+1. **`extra_hosts` in `docker-compose.yml`** (included by default):
+   ```yaml
+   extra_hosts:
+     - "host.docker.internal:host-gateway"
+   ```
+2. **Allow private MCP URLs** enabled in server settings, since `host.docker.internal` resolves to a private address
+
 ## Tool Selection
 
 Users select which MCP servers are active for their conversations. Selections are persisted in `user_tool_selections` and restored on login. Stale selections (referencing inaccessible servers) are automatically pruned.
