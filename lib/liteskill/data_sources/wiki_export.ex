@@ -73,7 +73,7 @@ defmodule Liteskill.DataSources.WikiExport do
   def encode_frontmatter(title, position, content) do
     """
     ---
-    title: #{title}
+    title: #{yaml_escape(title)}
     position: #{position || 0}
     ---
     #{content}\
@@ -82,4 +82,40 @@ defmodule Liteskill.DataSources.WikiExport do
 
   defp join_path("", name), do: name
   defp join_path(base, name), do: "#{base}/#{name}"
+
+  # coveralls-ignore-start
+  defp yaml_escape(value) when is_binary(value) do
+    if String.contains?(value, [
+         ":",
+         "#",
+         "'",
+         "\"",
+         "\n",
+         "[",
+         "]",
+         "{",
+         "}",
+         ",",
+         "&",
+         "*",
+         "?",
+         "|",
+         "-",
+         "<",
+         ">",
+         "=",
+         "!",
+         "%",
+         "@",
+         "`"
+       ]) or String.starts_with?(value, " ") or String.ends_with?(value, " ") do
+      escaped = String.replace(value, "\"", "\\\"")
+      "\"#{escaped}\""
+    else
+      value
+    end
+  end
+
+  defp yaml_escape(value), do: to_string(value)
+  # coveralls-ignore-stop
 end

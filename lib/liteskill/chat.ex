@@ -39,7 +39,7 @@ defmodule Liteskill.Chat do
 
   def create_conversation(params) do
     with :ok <-
-           Liteskill.Rbac.authorize(params[:user_id] || params.user_id, "conversations:create") do
+           Liteskill.Rbac.authorize(params[:user_id] || params["user_id"], "conversations:create") do
       conversation_id = params[:conversation_id] || Ecto.UUID.generate()
       stream_id = "conversation-#{conversation_id}"
 
@@ -197,14 +197,12 @@ defmodule Liteskill.Chat do
   # --- ACL Management (delegates to Authorization) ---
 
   def grant_conversation_access(conversation_id, grantor_id, grantee_user_id, role \\ "member") do
-    normalized_role = if role == "member", do: "manager", else: role
-
     Authorization.grant_access(
       "conversation",
       conversation_id,
       grantor_id,
       grantee_user_id,
-      normalized_role
+      Authorization.normalize_role(role)
     )
   end
 
@@ -217,14 +215,12 @@ defmodule Liteskill.Chat do
   end
 
   def grant_group_access(conversation_id, grantor_id, group_id, role \\ "member") do
-    normalized_role = if role == "member", do: "manager", else: role
-
     Authorization.grant_group_access(
       "conversation",
       conversation_id,
       grantor_id,
       group_id,
-      normalized_role
+      Authorization.normalize_role(role)
     )
   end
 
@@ -392,10 +388,7 @@ defmodule Liteskill.Chat do
     )
   end
 
-  @doc """
-  Recovers a stuck conversation without authorization checks.
-  Used by the periodic sweeper which operates without a user context.
-  """
+  @doc false
   def recover_stream_by_id(conversation_id) do
     conversation = Repo.get!(Conversation, conversation_id)
 

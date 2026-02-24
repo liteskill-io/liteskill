@@ -443,4 +443,13 @@ defmodule Liteskill.Authorization do
   defp can_revoke?(revoker_role, _target_role) when revoker_role in ["owner", "manager"], do: true
   # coveralls-ignore-next-line
   defp can_revoke?(_, _), do: false
+
+  @doc """
+  Normalizes legacy role names.
+
+  The "member" role was renamed to "manager" — this function ensures
+  backward-compatible handling when older code or data passes "member".
+  """
+  def normalize_role("member"), do: "manager"
+  def normalize_role(role), do: role
 end

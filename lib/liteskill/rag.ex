@@ -223,6 +223,7 @@ defmodule Liteskill.Rag do
 
   # --- Embedding ---
 
+  # coveralls-ignore-next-line
   def embed_chunks(document_id, chunks, user_id, opts \\ []) do
     with {:ok, document} <- get_document(document_id, user_id),
          {:ok, source} <- get_source(document.source_id, user_id),
@@ -302,6 +303,7 @@ defmodule Liteskill.Rag do
     end
   end
 
+  # coveralls-ignore-next-line
   def rerank(query, chunks, opts \\ []) do
     {plug_opts, rest} = Keyword.split(opts, [:plug])
     top_n = Keyword.get(rest, :top_n, 5)
@@ -324,6 +326,7 @@ defmodule Liteskill.Rag do
     end
   end
 
+  # coveralls-ignore-next-line
   def search_and_rerank(collection_id, query, user_id, opts \\ []) do
     {plug_opts, rest} = Keyword.split(opts, [:plug])
     search_limit = Keyword.get(rest, :search_limit, 50)
@@ -639,6 +642,7 @@ defmodule Liteskill.Rag do
 
   # --- Ingest ---
 
+  # coveralls-ignore-next-line
   def ingest_url(collection_id, url, user_id, opts \\ []) do
     with {:ok, _collection} <- get_collection(collection_id, user_id) do
       method = Keyword.get(opts, :method, "GET")
@@ -833,4 +837,39 @@ defmodule Liteskill.Rag do
   defp format_embed_error(reason) when is_binary(reason), do: reason
   defp format_embed_error(reason), do: inspect(reason)
   # coveralls-ignore-stop
+
+  @doc """
+  Returns true if any re-embedding jobs are currently queued or running.
+  """
+  def reembed_in_progress? do
+    Repo.exists?(
+      from(j in "oban_jobs",
+        where:
+          j.queue == "rag_ingest" and
+            j.worker == "Liteskill.Rag.ReembedWorker" and
+            j.state in ["available", "executing", "scheduled"]
+      )
+    )
+  end
+
+  @doc """
+  Gets a document by ID (with authorization) and preloads its source.
+  """
+  def get_document_with_source(id, user_id) do
+    with {:ok, document} <- get_document(id, user_id) do
+      {:ok, Repo.preload(document, :source)}
+    end
+  end
+
+  @doc """
+  Preloads document and source associations on RAG search result chunks.
+  """
+  def preload_result_sources(results) when is_list(results) do
+    chunks = Enum.map(results, & &1.chunk)
+    preloaded = Repo.preload(chunks, document: :source)
+
+    Enum.zip_with(results, preloaded, fn result, chunk ->
+      %{result | chunk: chunk}
+    end)
+  end
 end

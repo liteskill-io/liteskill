@@ -157,7 +157,7 @@ defmodule Liteskill.McpServers do
     :ok
   end
 
-  defp authorize_owner(entity, user_id), do: Authorization.authorize_owner(entity, user_id)
+  defdelegate authorize_owner(entity, user_id), to: Authorization
 
   defp url_validation_opts do
     [allow_private_urls: Liteskill.Settings.allow_private_mcp_urls?()]

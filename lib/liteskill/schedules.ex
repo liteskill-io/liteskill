@@ -270,5 +270,5 @@ defmodule Liteskill.Schedules do
 
   # --- Private ---
 
-  defp authorize_owner(entity, user_id), do: Authorization.authorize_owner(entity, user_id)
+  defdelegate authorize_owner(entity, user_id), to: Authorization
 end

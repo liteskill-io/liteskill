@@ -769,14 +769,18 @@ defmodule Liteskill.Reports do
   # --- ACL Management (delegates to Authorization) ---
 
   def grant_access(report_id, owner_id, grantee_email, role \\ "member") do
-    normalized_role = if role == "member", do: "manager", else: role
-
     case Repo.get_by(User, email: grantee_email) do
       nil ->
         {:error, :user_not_found}
 
       grantee ->
-        Authorization.grant_access("report", report_id, owner_id, grantee.id, normalized_role)
+        Authorization.grant_access(
+          "report",
+          report_id,
+          owner_id,
+          grantee.id,
+          Authorization.normalize_role(role)
+        )
     end
   end
 

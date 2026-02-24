@@ -4,14 +4,18 @@ defmodule LiteskillWeb.AgentStudioLive do
   Handles Agents, Teams, Runs, and Schedules pages.
   """
 
-  use LiteskillWeb, :html
+  use LiteskillWeb, :live_view
 
   alias Liteskill.Agents
+  alias Liteskill.Chat
+  alias Liteskill.LlmModels
   alias Liteskill.Runs
   alias Liteskill.Runs.Runner
   alias Liteskill.McpServers
   alias Liteskill.Schedules
   alias Liteskill.Teams
+  alias LiteskillWeb.{AgentStudioComponents, Layouts}
+  alias LiteskillWeb.{SharingComponents, SharingLive}
 
   @studio_actions [
     :agent_studio,
@@ -134,7 +138,7 @@ defmodule LiteskillWeb.AgentStudioLive do
   # --- Apply Actions ---
 
   defp reset_common(socket) do
-    Phoenix.Component.assign(socket,
+    assign(socket,
       conversation: nil,
       messages: [],
       streaming: false,
@@ -146,10 +150,181 @@ defmodule LiteskillWeb.AgentStudioLive do
 
   # Agent Studio Landing
 
+  # --- LiveView callbacks ---
+
+  @impl true
+  def mount(_params, _session, socket) do
+    conversations = Chat.list_conversations(socket.assigns.current_user.id)
+    user = socket.assigns.current_user
+    available_llm_models = LlmModels.list_active_models(user.id, model_type: "inference")
+
+    {:ok,
+     socket
+     |> assign(studio_assigns())
+     |> assign(
+       conversations: conversations,
+       conversation: nil,
+       sidebar_open: true,
+       has_admin_access: Liteskill.Rbac.has_any_admin_permission?(user.id),
+       single_user_mode: Liteskill.SingleUser.enabled?(),
+       available_llm_models: available_llm_models,
+       # Sharing modal state
+       show_sharing: false,
+       sharing_entity_type: nil,
+       sharing_entity_id: nil,
+       sharing_acls: [],
+       sharing_user_search_results: [],
+       sharing_user_search_query: "",
+       sharing_groups: [],
+       sharing_error: nil
+     ), layout: {LiteskillWeb.Layouts, :chat}}
+  end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+  end
+
+  defp apply_action(socket, action, params) when action in @studio_actions do
+    apply_studio_action(socket, action, params)
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div class="flex h-screen relative">
+      <Layouts.sidebar
+        sidebar_open={@sidebar_open}
+        live_action={@live_action}
+        conversations={@conversations}
+        active_conversation_id={nil}
+        current_user={@current_user}
+        has_admin_access={@has_admin_access}
+        single_user_mode={@single_user_mode}
+      />
+
+      <main class="flex-1 flex flex-col min-w-0">
+        <%= if @live_action == :agent_studio do %>
+          <AgentStudioComponents.agent_studio_landing sidebar_open={@sidebar_open} />
+        <% end %>
+        <%= if @live_action == :agents do %>
+          <AgentStudioComponents.agents_page
+            agents={@studio_agents}
+            current_user={@current_user}
+            sidebar_open={@sidebar_open}
+            confirm_delete_agent_id={@confirm_delete_agent_id}
+          />
+        <% end %>
+        <%= if @live_action in [:agent_new, :agent_edit] do %>
+          <AgentStudioComponents.agent_form_page
+            form={@agent_form}
+            editing={@editing_agent}
+            available_models={@available_llm_models}
+            available_mcp_servers={assigns[:available_mcp_servers] || []}
+            sidebar_open={@sidebar_open}
+          />
+        <% end %>
+        <%= if @live_action == :agent_show && @studio_agent do %>
+          <AgentStudioComponents.agent_show_page
+            agent={@studio_agent}
+            sidebar_open={@sidebar_open}
+          />
+        <% end %>
+        <%= if @live_action == :teams do %>
+          <AgentStudioComponents.teams_page
+            teams={@studio_teams}
+            current_user={@current_user}
+            sidebar_open={@sidebar_open}
+            confirm_delete_team_id={@confirm_delete_team_id}
+          />
+        <% end %>
+        <%= if @live_action in [:team_new, :team_edit] do %>
+          <AgentStudioComponents.team_form_page
+            form={@team_form}
+            editing={@editing_team}
+            available_agents={assigns[:available_agents] || []}
+            sidebar_open={@sidebar_open}
+          />
+        <% end %>
+        <%= if @live_action == :team_show && @studio_team do %>
+          <AgentStudioComponents.team_show_page
+            team={@studio_team}
+            sidebar_open={@sidebar_open}
+          />
+        <% end %>
+        <%= if @live_action == :runs do %>
+          <AgentStudioComponents.runs_page
+            runs={@studio_runs}
+            current_user={@current_user}
+            sidebar_open={@sidebar_open}
+            confirm_delete_run_id={@confirm_delete_run_id}
+          />
+        <% end %>
+        <%= if @live_action == :run_new do %>
+          <AgentStudioComponents.run_form_page
+            form={@run_form}
+            teams={@studio_teams}
+            sidebar_open={@sidebar_open}
+          />
+        <% end %>
+        <%= if @live_action == :run_show && @studio_run do %>
+          <AgentStudioComponents.run_show_page
+            run={@studio_run}
+            current_user={@current_user}
+            sidebar_open={@sidebar_open}
+            run_usage={@run_usage}
+            run_usage_by_model={@run_usage_by_model}
+          />
+        <% end %>
+        <%= if @live_action == :run_log_show do %>
+          <AgentStudioComponents.run_log_show_page
+            run={@studio_run}
+            log={@studio_log}
+            sidebar_open={@sidebar_open}
+          />
+        <% end %>
+        <%= if @live_action == :schedules do %>
+          <AgentStudioComponents.schedules_page
+            schedules={@studio_schedules}
+            current_user={@current_user}
+            sidebar_open={@sidebar_open}
+            confirm_delete_schedule_id={@confirm_delete_schedule_id}
+          />
+        <% end %>
+        <%= if @live_action == :schedule_new do %>
+          <AgentStudioComponents.schedule_form_page
+            form={@schedule_form}
+            teams={@studio_teams}
+            sidebar_open={@sidebar_open}
+          />
+        <% end %>
+        <%= if @live_action == :schedule_show && @studio_schedule do %>
+          <AgentStudioComponents.schedule_show_page
+            schedule={@studio_schedule}
+            sidebar_open={@sidebar_open}
+          />
+        <% end %>
+
+        <SharingComponents.sharing_modal
+          show={@show_sharing}
+          entity_type={@sharing_entity_type}
+          entity_id={@sharing_entity_id}
+          acls={@sharing_acls}
+          user_search_results={@sharing_user_search_results}
+          user_search_query={@sharing_user_search_query}
+          groups={@sharing_groups}
+          error={@sharing_error}
+          current_user_id={@current_user.id}
+        />
+      </main>
+    </div>
+    """
+  end
+
   def apply_studio_action(socket, :agent_studio, _params) do
     socket
     |> reset_common()
-    |> Phoenix.Component.assign(page_title: "Agent Studio")
+    |> assign(page_title: "Agent Studio")
   end
 
   # Agents
@@ -160,7 +335,7 @@ defmodule LiteskillWeb.AgentStudioLive do
 
     socket
     |> reset_common()
-    |> Phoenix.Component.assign(
+    |> assign(
       studio_agents: agents,
       confirm_delete_agent_id: nil,
       page_title: "Agents"
@@ -170,7 +345,7 @@ defmodule LiteskillWeb.AgentStudioLive do
   def apply_studio_action(socket, :agent_new, _params) do
     socket
     |> reset_common()
-    |> Phoenix.Component.assign(
+    |> assign(
       agent_form: agent_form(),
       editing_agent: nil,
       page_title: "New Agent"
@@ -184,12 +359,12 @@ defmodule LiteskillWeb.AgentStudioLive do
       {:ok, agent} ->
         socket
         |> reset_common()
-        |> Phoenix.Component.assign(studio_agent: agent, page_title: agent.name)
+        |> assign(studio_agent: agent, page_title: agent.name)
 
       {:error, reason} ->
         socket
-        |> Phoenix.LiveView.put_flash(:error, action_error("load agent", reason))
-        |> Phoenix.LiveView.push_navigate(to: "/agents")
+        |> put_flash(:error, action_error("load agent", reason))
+        |> push_navigate(to: "/agents")
     end
   end
 
@@ -202,7 +377,7 @@ defmodule LiteskillWeb.AgentStudioLive do
 
         socket
         |> reset_common()
-        |> Phoenix.Component.assign(
+        |> assign(
           editing_agent: agent,
           available_mcp_servers: available_mcp_servers,
           agent_form:
@@ -220,8 +395,8 @@ defmodule LiteskillWeb.AgentStudioLive do
 
       {:error, reason} ->
         socket
-        |> Phoenix.LiveView.put_flash(:error, action_error("load agent", reason))
-        |> Phoenix.LiveView.push_navigate(to: "/agents")
+        |> put_flash(:error, action_error("load agent", reason))
+        |> push_navigate(to: "/agents")
     end
   end
 
@@ -233,7 +408,7 @@ defmodule LiteskillWeb.AgentStudioLive do
 
     socket
     |> reset_common()
-    |> Phoenix.Component.assign(
+    |> assign(
       studio_teams: teams,
       confirm_delete_team_id: nil,
       page_title: "Teams"
@@ -243,7 +418,7 @@ defmodule LiteskillWeb.AgentStudioLive do
   def apply_studio_action(socket, :team_new, _params) do
     socket
     |> reset_common()
-    |> Phoenix.Component.assign(
+    |> assign(
       team_form: team_form(),
       editing_team: nil,
       page_title: "New Team"
@@ -257,12 +432,12 @@ defmodule LiteskillWeb.AgentStudioLive do
       {:ok, team} ->
         socket
         |> reset_common()
-        |> Phoenix.Component.assign(studio_team: team, page_title: team.name)
+        |> assign(studio_team: team, page_title: team.name)
 
       {:error, reason} ->
         socket
-        |> Phoenix.LiveView.put_flash(:error, action_error("load team", reason))
-        |> Phoenix.LiveView.push_navigate(to: "/teams")
+        |> put_flash(:error, action_error("load team", reason))
+        |> push_navigate(to: "/teams")
     end
   end
 
@@ -277,7 +452,7 @@ defmodule LiteskillWeb.AgentStudioLive do
 
         socket
         |> reset_common()
-        |> Phoenix.Component.assign(
+        |> assign(
           editing_team: team,
           available_agents: available_agents,
           team_form:
@@ -293,8 +468,8 @@ defmodule LiteskillWeb.AgentStudioLive do
 
       {:error, reason} ->
         socket
-        |> Phoenix.LiveView.put_flash(:error, action_error("load team", reason))
-        |> Phoenix.LiveView.push_navigate(to: "/teams")
+        |> put_flash(:error, action_error("load team", reason))
+        |> push_navigate(to: "/teams")
     end
   end
 
@@ -306,7 +481,7 @@ defmodule LiteskillWeb.AgentStudioLive do
 
     socket
     |> reset_common()
-    |> Phoenix.Component.assign(
+    |> assign(
       studio_runs: runs,
       confirm_delete_run_id: nil,
       page_title: "Runs"
@@ -319,7 +494,7 @@ defmodule LiteskillWeb.AgentStudioLive do
 
     socket
     |> reset_common()
-    |> Phoenix.Component.assign(
+    |> assign(
       run_form: run_form(),
       studio_teams: teams,
       page_title: "New Run"
@@ -339,7 +514,7 @@ defmodule LiteskillWeb.AgentStudioLive do
 
         socket
         |> reset_common()
-        |> Phoenix.Component.assign(
+        |> assign(
           studio_run: run,
           run_usage: run_usage,
           run_usage_by_model: run_usage_by_model,
@@ -348,8 +523,8 @@ defmodule LiteskillWeb.AgentStudioLive do
 
       {:error, reason} ->
         socket
-        |> Phoenix.LiveView.put_flash(:error, action_error("load run", reason))
-        |> Phoenix.LiveView.push_navigate(to: "/runs")
+        |> put_flash(:error, action_error("load run", reason))
+        |> push_navigate(to: "/runs")
     end
   end
 
@@ -363,7 +538,7 @@ defmodule LiteskillWeb.AgentStudioLive do
          {:ok, log} <- Runs.get_log(log_id, user_id) do
       socket
       |> reset_common()
-      |> Phoenix.Component.assign(
+      |> assign(
         studio_run: run,
         studio_log: log,
         page_title: "Log: #{log.step}"
@@ -371,8 +546,8 @@ defmodule LiteskillWeb.AgentStudioLive do
     else
       {:error, reason} ->
         socket
-        |> Phoenix.LiveView.put_flash(:error, action_error("load log entry", reason))
-        |> Phoenix.LiveView.push_navigate(to: "/runs")
+        |> put_flash(:error, action_error("load log entry", reason))
+        |> push_navigate(to: "/runs")
     end
   end
 
@@ -384,7 +559,7 @@ defmodule LiteskillWeb.AgentStudioLive do
 
     socket
     |> reset_common()
-    |> Phoenix.Component.assign(
+    |> assign(
       studio_schedules: schedules,
       confirm_delete_schedule_id: nil,
       page_title: "Schedules"
@@ -397,7 +572,7 @@ defmodule LiteskillWeb.AgentStudioLive do
 
     socket
     |> reset_common()
-    |> Phoenix.Component.assign(
+    |> assign(
       schedule_form: schedule_form(),
       studio_teams: teams,
       page_title: "New Schedule"
@@ -411,20 +586,38 @@ defmodule LiteskillWeb.AgentStudioLive do
       {:ok, schedule} ->
         socket
         |> reset_common()
-        |> Phoenix.Component.assign(studio_schedule: schedule, page_title: schedule.name)
+        |> assign(studio_schedule: schedule, page_title: schedule.name)
 
       {:error, reason} ->
         socket
-        |> Phoenix.LiveView.put_flash(:error, action_error("load schedule", reason))
-        |> Phoenix.LiveView.push_navigate(to: "/schedules")
+        |> put_flash(:error, action_error("load schedule", reason))
+        |> push_navigate(to: "/schedules")
     end
   end
 
   # --- Event Handlers ---
 
+  @impl true
+  def handle_event("toggle_sidebar", _params, socket) do
+    {:noreply, assign(socket, sidebar_open: !socket.assigns.sidebar_open)}
+  end
+
+  @impl true
+  def handle_event("select_conversation", %{"id" => id}, socket) do
+    {:noreply, push_navigate(socket, to: "/c/#{id}")}
+  end
+
+  @sharing_events SharingLive.sharing_events()
+
+  @impl true
+  def handle_event(event, params, socket) when event in @sharing_events do
+    SharingLive.handle_event(event, params, socket)
+  end
+
   # Agent events
 
-  def handle_studio_event("save_agent", %{"agent" => params}, socket) do
+  @impl true
+  def handle_event("save_agent", %{"agent" => params}, socket) do
     user_id = socket.assigns.current_user.id
     params = params |> decode_opinions()
 
@@ -441,71 +634,75 @@ defmodule LiteskillWeb.AgentStudioLive do
 
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:info, msg)
-         |> Phoenix.LiveView.push_navigate(to: "/agents/#{agent.id}")}
+         |> put_flash(:info, msg)
+         |> push_navigate(to: "/agents/#{agent.id}")}
 
       {:error, changeset} ->
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:error, format_changeset(changeset))
-         |> Phoenix.Component.assign(agent_form: agent_form(params))}
+         |> put_flash(:error, format_changeset(changeset))
+         |> assign(agent_form: agent_form(params))}
     end
   end
 
-  def handle_studio_event("validate_agent", %{"agent" => params}, socket) do
+  @impl true
+  def handle_event("validate_agent", %{"agent" => params}, socket) do
     params = normalize_opinion_params(params)
-    {:noreply, Phoenix.Component.assign(socket, agent_form: agent_form(params))}
+    {:noreply, assign(socket, agent_form: agent_form(params))}
   end
 
-  def handle_studio_event("select_strategy", %{"strategy" => strategy}, socket) do
+  @impl true
+  def handle_event("select_strategy", %{"strategy" => strategy}, socket) do
     current = socket.assigns.agent_form.params
 
-    {:noreply,
-     Phoenix.Component.assign(socket, agent_form: agent_form(%{current | "strategy" => strategy}))}
+    {:noreply, assign(socket, agent_form: agent_form(%{current | "strategy" => strategy}))}
   end
 
-  def handle_studio_event("add_opinion", _params, socket) do
+  @impl true
+  def handle_event("add_opinion", _params, socket) do
     current = socket.assigns.agent_form.params
     opinions = (current["opinions"] || []) ++ [%{"key" => "", "value" => ""}]
 
-    {:noreply,
-     Phoenix.Component.assign(socket, agent_form: agent_form(%{current | "opinions" => opinions}))}
+    {:noreply, assign(socket, agent_form: agent_form(%{current | "opinions" => opinions}))}
   end
 
-  def handle_studio_event("remove_opinion", %{"index" => idx}, socket) do
+  @impl true
+  def handle_event("remove_opinion", %{"index" => idx}, socket) do
     idx = String.to_integer(idx)
     current = socket.assigns.agent_form.params
     opinions = List.delete_at(current["opinions"] || [], idx)
 
-    {:noreply,
-     Phoenix.Component.assign(socket, agent_form: agent_form(%{current | "opinions" => opinions}))}
+    {:noreply, assign(socket, agent_form: agent_form(%{current | "opinions" => opinions}))}
   end
 
-  def handle_studio_event("confirm_delete_agent", %{"id" => id}, socket) do
-    {:noreply, Phoenix.Component.assign(socket, confirm_delete_agent_id: id)}
+  @impl true
+  def handle_event("confirm_delete_agent", %{"id" => id}, socket) do
+    {:noreply, assign(socket, confirm_delete_agent_id: id)}
   end
 
-  def handle_studio_event("cancel_delete_agent", _params, socket) do
-    {:noreply, Phoenix.Component.assign(socket, confirm_delete_agent_id: nil)}
+  @impl true
+  def handle_event("cancel_delete_agent", _params, socket) do
+    {:noreply, assign(socket, confirm_delete_agent_id: nil)}
   end
 
-  def handle_studio_event("delete_agent", %{"id" => id}, socket) do
+  @impl true
+  def handle_event("delete_agent", %{"id" => id}, socket) do
     user_id = socket.assigns.current_user.id
 
     case Agents.delete_agent(id, user_id) do
       {:ok, _} ->
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:info, "Agent deleted")
-         |> Phoenix.LiveView.push_navigate(to: "/agents")}
+         |> put_flash(:info, "Agent deleted")
+         |> push_navigate(to: "/agents")}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("delete agent", reason))}
+        {:noreply, put_flash(socket, :error, action_error("delete agent", reason))}
     end
   end
 
-  def handle_studio_event("add_agent_tool", %{"server_id" => "builtin:" <> _ = id}, socket) do
+  @impl true
+  def handle_event("add_agent_tool", %{"server_id" => "builtin:" <> _ = id}, socket) do
     agent = socket.assigns.editing_agent
     existing = get_in(agent.config, ["builtin_server_ids"]) || []
 
@@ -519,19 +716,19 @@ defmodule LiteskillWeb.AgentStudioLive do
           available = compute_available_servers(socket.assigns.current_user.id, agent)
 
           {:noreply,
-           Phoenix.Component.assign(socket,
+           assign(socket,
              editing_agent: agent,
              available_mcp_servers: available
            )}
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("add server", reason))}
+          {:noreply, put_flash(socket, :error, action_error("add server", reason))}
       end
     end
   end
 
-  def handle_studio_event("add_agent_tool", %{"server_id" => server_id}, socket) do
+  @impl true
+  def handle_event("add_agent_tool", %{"server_id" => server_id}, socket) do
     agent = socket.assigns.editing_agent
 
     case Agents.grant_tool_access(agent.id, server_id, socket.assigns.current_user.id) do
@@ -540,17 +737,18 @@ defmodule LiteskillWeb.AgentStudioLive do
         available = compute_available_servers(socket.assigns.current_user.id, agent)
 
         {:noreply,
-         Phoenix.Component.assign(socket,
+         assign(socket,
            editing_agent: agent,
            available_mcp_servers: available
          )}
 
       {:error, reason} ->
-        {:noreply, Phoenix.LiveView.put_flash(socket, :error, action_error("add server", reason))}
+        {:noreply, put_flash(socket, :error, action_error("add server", reason))}
     end
   end
 
-  def handle_studio_event("remove_agent_tool", %{"server_id" => "builtin:" <> _ = id}, socket) do
+  @impl true
+  def handle_event("remove_agent_tool", %{"server_id" => "builtin:" <> _ = id}, socket) do
     agent = socket.assigns.editing_agent
     existing = get_in(agent.config, ["builtin_server_ids"]) || []
     config = Map.put(agent.config || %{}, "builtin_server_ids", List.delete(existing, id))
@@ -560,18 +758,18 @@ defmodule LiteskillWeb.AgentStudioLive do
         available = compute_available_servers(socket.assigns.current_user.id, agent)
 
         {:noreply,
-         Phoenix.Component.assign(socket,
+         assign(socket,
            editing_agent: agent,
            available_mcp_servers: available
          )}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("remove server", reason))}
+        {:noreply, put_flash(socket, :error, action_error("remove server", reason))}
     end
   end
 
-  def handle_studio_event("remove_agent_tool", %{"server_id" => server_id}, socket) do
+  @impl true
+  def handle_event("remove_agent_tool", %{"server_id" => server_id}, socket) do
     agent = socket.assigns.editing_agent
 
     case Agents.revoke_tool_access(agent.id, server_id, socket.assigns.current_user.id) do
@@ -580,20 +778,20 @@ defmodule LiteskillWeb.AgentStudioLive do
         available = compute_available_servers(socket.assigns.current_user.id, agent)
 
         {:noreply,
-         Phoenix.Component.assign(socket,
+         assign(socket,
            editing_agent: agent,
            available_mcp_servers: available
          )}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("remove server", reason))}
+        {:noreply, put_flash(socket, :error, action_error("remove server", reason))}
     end
   end
 
   # Team events
 
-  def handle_studio_event("save_team", %{"team" => params}, socket) do
+  @impl true
+  def handle_event("save_team", %{"team" => params}, socket) do
     user_id = socket.assigns.current_user.id
 
     result =
@@ -609,42 +807,45 @@ defmodule LiteskillWeb.AgentStudioLive do
 
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:info, msg)
-         |> Phoenix.LiveView.push_navigate(to: "/teams/#{team.id}")}
+         |> put_flash(:info, msg)
+         |> push_navigate(to: "/teams/#{team.id}")}
 
       {:error, changeset} ->
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:error, format_changeset(changeset))
-         |> Phoenix.Component.assign(team_form: team_form(params))}
+         |> put_flash(:error, format_changeset(changeset))
+         |> assign(team_form: team_form(params))}
     end
   end
 
-  def handle_studio_event("confirm_delete_team", %{"id" => id}, socket) do
-    {:noreply, Phoenix.Component.assign(socket, confirm_delete_team_id: id)}
+  @impl true
+  def handle_event("confirm_delete_team", %{"id" => id}, socket) do
+    {:noreply, assign(socket, confirm_delete_team_id: id)}
   end
 
-  def handle_studio_event("cancel_delete_team", _params, socket) do
-    {:noreply, Phoenix.Component.assign(socket, confirm_delete_team_id: nil)}
+  @impl true
+  def handle_event("cancel_delete_team", _params, socket) do
+    {:noreply, assign(socket, confirm_delete_team_id: nil)}
   end
 
-  def handle_studio_event("delete_team", %{"id" => id}, socket) do
+  @impl true
+  def handle_event("delete_team", %{"id" => id}, socket) do
     user_id = socket.assigns.current_user.id
 
     case Teams.delete_team(id, user_id) do
       {:ok, _} ->
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:info, "Team deleted")
-         |> Phoenix.LiveView.push_navigate(to: "/teams")}
+         |> put_flash(:info, "Team deleted")
+         |> push_navigate(to: "/teams")}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("delete team", reason))}
+        {:noreply, put_flash(socket, :error, action_error("delete team", reason))}
     end
   end
 
-  def handle_studio_event("add_team_member", %{"agent_id" => agent_id}, socket) do
+  @impl true
+  def handle_event("add_team_member", %{"agent_id" => agent_id}, socket) do
     team = socket.assigns.editing_team
     user_id = socket.assigns.current_user.id
 
@@ -657,18 +858,18 @@ defmodule LiteskillWeb.AgentStudioLive do
           Enum.reject(socket.assigns.available_agents, &MapSet.member?(member_agent_ids, &1.id))
 
         {:noreply,
-         Phoenix.Component.assign(socket,
+         assign(socket,
            editing_team: team,
            available_agents: available_agents
          )}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("add team member", reason))}
+        {:noreply, put_flash(socket, :error, action_error("add team member", reason))}
     end
   end
 
-  def handle_studio_event("remove_team_member", %{"agent_id" => agent_id}, socket) do
+  @impl true
+  def handle_event("remove_team_member", %{"agent_id" => agent_id}, socket) do
     team = socket.assigns.editing_team
     user_id = socket.assigns.current_user.id
 
@@ -682,20 +883,20 @@ defmodule LiteskillWeb.AgentStudioLive do
           Enum.reject(all_agents, &MapSet.member?(member_agent_ids, &1.id))
 
         {:noreply,
-         Phoenix.Component.assign(socket,
+         assign(socket,
            editing_team: team,
            available_agents: available_agents
          )}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("remove team member", reason))}
+        {:noreply, put_flash(socket, :error, action_error("remove team member", reason))}
     end
   end
 
   # Run events
 
-  def handle_studio_event("save_run", %{"run" => form_params}, socket) do
+  @impl true
+  def handle_event("save_run", %{"run" => form_params}, socket) do
     user_id = socket.assigns.current_user.id
 
     params =
@@ -708,24 +909,24 @@ defmodule LiteskillWeb.AgentStudioLive do
       {:ok, run} ->
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:info, "Run created")
-         |> Phoenix.LiveView.push_navigate(to: "/runs/#{run.id}")}
+         |> put_flash(:info, "Run created")
+         |> push_navigate(to: "/runs/#{run.id}")}
 
       {:error, changeset} ->
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:error, format_changeset(changeset))
-         |> Phoenix.Component.assign(run_form: run_form(form_params))}
+         |> put_flash(:error, format_changeset(changeset))
+         |> assign(run_form: run_form(form_params))}
     end
   end
 
-  def handle_studio_event("start_run", _params, socket) do
+  @impl true
+  def handle_event("start_run", _params, socket) do
     user_id = socket.assigns.current_user.id
     run = socket.assigns.studio_run
 
     if run.status != "pending" do
-      {:noreply,
-       Phoenix.LiveView.put_flash(socket, :error, "Run can only be started when pending")}
+      {:noreply, put_flash(socket, :error, "Run can only be started when pending")}
     else
       Task.Supervisor.start_child(Liteskill.TaskSupervisor, fn ->
         Runner.run(run.id, user_id)
@@ -733,12 +934,13 @@ defmodule LiteskillWeb.AgentStudioLive do
 
       {:noreply,
        socket
-       |> Phoenix.LiveView.put_flash(:info, "Run started.")
-       |> Phoenix.Component.assign(studio_run: %{run | status: "running"})}
+       |> put_flash(:info, "Run started.")
+       |> assign(studio_run: %{run | status: "running"})}
     end
   end
 
-  def handle_studio_event("rerun", %{"id" => id}, socket) do
+  @impl true
+  def handle_event("rerun", %{"id" => id}, socket) do
     user_id = socket.assigns.current_user.id
 
     with {:ok, original} <- Runs.get_run(id, user_id),
@@ -760,15 +962,16 @@ defmodule LiteskillWeb.AgentStudioLive do
 
       {:noreply,
        socket
-       |> Phoenix.LiveView.put_flash(:info, "Rerun started.")
-       |> Phoenix.LiveView.push_navigate(to: "/runs/#{new_run.id}")}
+       |> put_flash(:info, "Rerun started.")
+       |> push_navigate(to: "/runs/#{new_run.id}")}
     else
       {:error, reason} ->
-        {:noreply, Phoenix.LiveView.put_flash(socket, :error, action_error("rerun", reason))}
+        {:noreply, put_flash(socket, :error, action_error("rerun", reason))}
     end
   end
 
-  def handle_studio_event("retry_run", %{"id" => id}, socket) do
+  @impl true
+  def handle_event("retry_run", %{"id" => id}, socket) do
     user_id = socket.assigns.current_user.id
 
     case Runs.get_run(id, user_id) do
@@ -779,119 +982,125 @@ defmodule LiteskillWeb.AgentStudioLive do
 
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:info, "Retrying run...")
-         |> Phoenix.Component.assign(studio_run: %{run | status: "running"})}
+         |> put_flash(:info, "Retrying run...")
+         |> assign(studio_run: %{run | status: "running"})}
 
       {:ok, _} ->
         {:noreply,
-         Phoenix.LiveView.put_flash(
+         put_flash(
            socket,
            :error,
            "Only failed or cancelled runs can be retried"
          )}
 
       {:error, reason} ->
-        {:noreply, Phoenix.LiveView.put_flash(socket, :error, action_error("retry run", reason))}
+        {:noreply, put_flash(socket, :error, action_error("retry run", reason))}
     end
   end
 
-  def handle_studio_event("cancel_run", %{"id" => id}, socket) do
+  @impl true
+  def handle_event("cancel_run", %{"id" => id}, socket) do
     user_id = socket.assigns.current_user.id
 
     case Runs.cancel_run(id, user_id) do
       {:ok, run} ->
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:info, "Run cancelled")
-         |> Phoenix.Component.assign(studio_run: Runs.get_run!(run.id))}
+         |> put_flash(:info, "Run cancelled")
+         |> assign(studio_run: Runs.get_run!(run.id))}
 
       {:error, :not_running} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("cancel run", :not_running))}
+        {:noreply, put_flash(socket, :error, action_error("cancel run", :not_running))}
 
       {:error, reason} ->
-        {:noreply, Phoenix.LiveView.put_flash(socket, :error, action_error("cancel run", reason))}
+        {:noreply, put_flash(socket, :error, action_error("cancel run", reason))}
     end
   end
 
-  def handle_studio_event("confirm_delete_run", %{"id" => id}, socket) do
-    {:noreply, Phoenix.Component.assign(socket, confirm_delete_run_id: id)}
+  @impl true
+  def handle_event("confirm_delete_run", %{"id" => id}, socket) do
+    {:noreply, assign(socket, confirm_delete_run_id: id)}
   end
 
-  def handle_studio_event("cancel_delete_run", _params, socket) do
-    {:noreply, Phoenix.Component.assign(socket, confirm_delete_run_id: nil)}
+  @impl true
+  def handle_event("cancel_delete_run", _params, socket) do
+    {:noreply, assign(socket, confirm_delete_run_id: nil)}
   end
 
-  def handle_studio_event("delete_run", %{"id" => id}, socket) do
+  @impl true
+  def handle_event("delete_run", %{"id" => id}, socket) do
     user_id = socket.assigns.current_user.id
 
     case Runs.delete_run(id, user_id) do
       {:ok, _} ->
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:info, "Run deleted")
-         |> Phoenix.LiveView.push_navigate(to: "/runs")}
+         |> put_flash(:info, "Run deleted")
+         |> push_navigate(to: "/runs")}
 
       {:error, reason} ->
-        {:noreply, Phoenix.LiveView.put_flash(socket, :error, action_error("delete run", reason))}
+        {:noreply, put_flash(socket, :error, action_error("delete run", reason))}
     end
   end
 
   # Schedule events
 
-  def handle_studio_event("save_schedule", %{"schedule" => params}, socket) do
+  @impl true
+  def handle_event("save_schedule", %{"schedule" => params}, socket) do
     user_id = socket.assigns.current_user.id
 
     case Schedules.create_schedule(Map.put(params, "user_id", user_id)) do
       {:ok, schedule} ->
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:info, "Schedule created")
-         |> Phoenix.LiveView.push_navigate(to: "/schedules/#{schedule.id}")}
+         |> put_flash(:info, "Schedule created")
+         |> push_navigate(to: "/schedules/#{schedule.id}")}
 
       {:error, changeset} ->
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:error, format_changeset(changeset))
-         |> Phoenix.Component.assign(schedule_form: schedule_form(params))}
+         |> put_flash(:error, format_changeset(changeset))
+         |> assign(schedule_form: schedule_form(params))}
     end
   end
 
-  def handle_studio_event("toggle_schedule", %{"id" => id}, socket) do
+  @impl true
+  def handle_event("toggle_schedule", %{"id" => id}, socket) do
     user_id = socket.assigns.current_user.id
 
     case Schedules.toggle_schedule(id, user_id) do
       {:ok, _} ->
         schedules = Schedules.list_schedules(user_id)
-        {:noreply, Phoenix.Component.assign(socket, studio_schedules: schedules)}
+        {:noreply, assign(socket, studio_schedules: schedules)}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("toggle schedule", reason))}
+        {:noreply, put_flash(socket, :error, action_error("toggle schedule", reason))}
     end
   end
 
-  def handle_studio_event("confirm_delete_schedule", %{"id" => id}, socket) do
-    {:noreply, Phoenix.Component.assign(socket, confirm_delete_schedule_id: id)}
+  @impl true
+  def handle_event("confirm_delete_schedule", %{"id" => id}, socket) do
+    {:noreply, assign(socket, confirm_delete_schedule_id: id)}
   end
 
-  def handle_studio_event("cancel_delete_schedule", _params, socket) do
-    {:noreply, Phoenix.Component.assign(socket, confirm_delete_schedule_id: nil)}
+  @impl true
+  def handle_event("cancel_delete_schedule", _params, socket) do
+    {:noreply, assign(socket, confirm_delete_schedule_id: nil)}
   end
 
-  def handle_studio_event("delete_schedule", %{"id" => id}, socket) do
+  @impl true
+  def handle_event("delete_schedule", %{"id" => id}, socket) do
     user_id = socket.assigns.current_user.id
 
     case Schedules.delete_schedule(id, user_id) do
       {:ok, _} ->
         {:noreply,
          socket
-         |> Phoenix.LiveView.put_flash(:info, "Schedule deleted")
-         |> Phoenix.LiveView.push_navigate(to: "/schedules")}
+         |> put_flash(:info, "Schedule deleted")
+         |> push_navigate(to: "/schedules")}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("delete schedule", reason))}
+        {:noreply, put_flash(socket, :error, action_error("delete schedule", reason))}
     end
   end
 
@@ -973,7 +1182,7 @@ defmodule LiteskillWeb.AgentStudioLive do
     run_usage_by_model = Liteskill.Usage.usage_by_run_and_model(run.id)
 
     {:noreply,
-     Phoenix.Component.assign(socket,
+     assign(socket,
        studio_run: run,
        run_usage: run_usage,
        run_usage_by_model: run_usage_by_model
@@ -994,7 +1203,7 @@ defmodule LiteskillWeb.AgentStudioLive do
             run_usage_by_model = Liteskill.Usage.usage_by_run_and_model(run.id)
 
             {:noreply,
-             Phoenix.Component.assign(socket,
+             assign(socket,
                studio_run: refreshed,
                run_usage: run_usage,
                run_usage_by_model: run_usage_by_model
@@ -1012,4 +1221,19 @@ defmodule LiteskillWeb.AgentStudioLive do
       _ -> :ok
     end
   end
+
+  # --- handle_info callbacks ---
+
+  @impl true
+  def handle_info({:run_updated, _run} = msg, socket) do
+    handle_run_info(msg, socket)
+  end
+
+  @impl true
+  def handle_info({:run_log_added, _log} = msg, socket) do
+    handle_run_info(msg, socket)
+  end
+
+  @impl true
+  def handle_info(_msg, socket), do: {:noreply, socket}
 end

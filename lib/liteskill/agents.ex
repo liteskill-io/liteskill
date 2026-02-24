@@ -178,7 +178,7 @@ defmodule Liteskill.Agents do
     end
   end
 
-  defp authorize_owner(entity, user_id), do: Authorization.authorize_owner(entity, user_id)
+  defdelegate authorize_owner(entity, user_id), to: Authorization
 
   defp validate_model_access(nil, _user_id), do: :ok
   defp validate_model_access("", _user_id), do: :ok

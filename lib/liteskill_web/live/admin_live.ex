@@ -4,9 +4,8 @@ defmodule LiteskillWeb.AdminLive do
   Handles server management, user/group management, LLM providers/models, and usage analytics.
   """
 
-  use LiteskillWeb, :html
+  use LiteskillWeb, :live_view
 
-  import LiteskillWeb.ErrorHelpers
   import LiteskillWeb.FormatHelpers
 
   alias Liteskill.Accounts
@@ -20,6 +19,8 @@ defmodule LiteskillWeb.AdminLive do
   alias Liteskill.Settings
   alias Liteskill.Usage
   alias LiteskillWeb.OpenRouterController
+  alias LiteskillWeb.ProfileLive
+  alias LiteskillWeb.Layouts
   alias LiteskillWeb.SettingsLive
   alias LiteskillWeb.SourcesComponents
 
@@ -96,11 +97,162 @@ defmodule LiteskillWeb.AdminLive do
     ]
   end
 
+  # --- LiveView callbacks ---
+
+  @impl true
+  def mount(_params, _session, socket) do
+    conversations = Liteskill.Chat.list_conversations(socket.assigns.current_user.id)
+
+    {:ok,
+     socket
+     |> assign(admin_assigns())
+     |> assign(ProfileLive.profile_assigns())
+     |> assign(
+       conversations: conversations,
+       conversation: nil,
+       sidebar_open: true,
+       single_user_mode: Liteskill.SingleUser.enabled?(),
+       has_admin_access: true,
+       settings_mode: false
+     ), layout: {LiteskillWeb.Layouts, :chat}}
+  end
+
+  @impl true
+  def handle_params(_params, _uri, socket) do
+    {:noreply, apply_action(socket, socket.assigns.live_action)}
+  end
+
+  defp apply_action(socket, action) when action in @admin_actions do
+    apply_admin_action(socket, action, socket.assigns.current_user)
+  end
+
+  defp apply_action(socket, :settings_account) do
+    socket
+    |> assign(settings_mode: true)
+    |> ProfileLive.apply_profile_action(:info, socket.assigns.current_user)
+  end
+
+  defp apply_action(socket, action) do
+    admin_action = SettingsLive.settings_to_admin_action(action)
+
+    if admin_action do
+      socket
+      |> assign(settings_mode: true)
+      |> apply_admin_action(admin_action, socket.assigns.current_user)
+    else
+      push_navigate(socket, to: ~p"/admin")
+    end
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div class="flex h-screen relative">
+      <Layouts.sidebar
+        sidebar_open={@sidebar_open}
+        live_action={@live_action}
+        conversations={@conversations}
+        active_conversation_id={nil}
+        current_user={@current_user}
+        has_admin_access={@has_admin_access}
+        single_user_mode={@single_user_mode}
+      />
+
+      <main class="flex-1 flex flex-col min-w-0">
+        <%= if @live_action == :settings_account do %>
+          <ProfileLive.profile
+            live_action={:info}
+            current_user={@current_user}
+            sidebar_open={@sidebar_open}
+            password_form={@password_form}
+            password_error={@password_error}
+            password_success={@password_success}
+            user_llm_providers={@user_llm_providers}
+            user_editing_provider={@user_editing_provider}
+            user_provider_form={@user_provider_form}
+            user_llm_models={@user_llm_models}
+            user_editing_model={@user_editing_model}
+            user_model_form={@user_model_form}
+            settings_mode={true}
+            settings_action={@live_action}
+          />
+        <% else %>
+          <.admin_panel
+            live_action={
+              if(@settings_mode,
+                do: SettingsLive.settings_to_admin_action(@live_action),
+                else: @live_action
+              )
+            }
+            current_user={@current_user}
+            sidebar_open={@sidebar_open}
+            single_user_mode={@single_user_mode}
+            profile_users={@profile_users}
+            profile_groups={@profile_groups}
+            group_detail={@group_detail}
+            group_members={@group_members}
+            temp_password_user_id={@temp_password_user_id}
+            llm_models={@llm_models}
+            editing_llm_model={@editing_llm_model}
+            llm_model_form={@llm_model_form}
+            llm_providers={@llm_providers}
+            editing_llm_provider={@editing_llm_provider}
+            llm_provider_form={@llm_provider_form}
+            server_settings={@server_settings}
+            invitations={@invitations}
+            new_invitation_url={@new_invitation_url}
+            admin_usage_data={@admin_usage_data}
+            admin_usage_period={@admin_usage_period}
+            rbac_roles={@rbac_roles}
+            editing_role={@editing_role}
+            role_form={@role_form}
+            role_users={@role_users}
+            role_groups={@role_groups}
+            role_user_search={@role_user_search}
+            setup_steps={@setup_steps}
+            setup_step={@setup_step}
+            setup_form={@setup_form}
+            setup_error={@setup_error}
+            setup_selected_permissions={@setup_selected_permissions}
+            setup_data_sources={@setup_data_sources}
+            setup_selected_sources={@setup_selected_sources}
+            setup_sources_to_configure={@setup_sources_to_configure}
+            setup_current_config_index={@setup_current_config_index}
+            setup_config_form={@setup_config_form}
+            setup_llm_providers={@setup_llm_providers}
+            setup_llm_models={@setup_llm_models}
+            setup_llm_provider_form={@setup_llm_provider_form}
+            setup_llm_model_form={@setup_llm_model_form}
+            setup_rag_embedding_models={@setup_rag_embedding_models}
+            setup_rag_current_model={@setup_rag_current_model}
+            setup_provider_view={@setup_provider_view}
+            rag_embedding_models={@rag_embedding_models}
+            rag_current_model={@rag_current_model}
+            rag_stats={@rag_stats}
+            rag_confirm_change={@rag_confirm_change}
+            rag_confirm_input={@rag_confirm_input}
+            rag_selected_model_id={@rag_selected_model_id}
+            rag_reembed_in_progress={@rag_reembed_in_progress}
+            or_search={@or_search}
+            or_results={@or_results}
+            or_loading={@or_loading}
+            embed_results_all={@embed_results_all}
+            embed_search={@embed_search}
+            embed_results={@embed_results}
+            settings_mode={@settings_mode}
+            settings_action={@live_action}
+          />
+        <% end %>
+      </main>
+    </div>
+    """
+  end
+
   def apply_admin_action(socket, action, user) do
     if Liteskill.Rbac.has_any_admin_permission?(user.id) do
       load_tab_data(socket, action)
     else
-      Phoenix.LiveView.push_navigate(socket, to: ~p"/profile")
+      push_navigate(socket, to: ~p"/profile")
     end
   end
 
@@ -108,7 +260,7 @@ defmodule LiteskillWeb.AdminLive do
     period = socket.assigns[:admin_usage_period] || "30d"
     usage_data = load_usage_data(period)
 
-    Phoenix.Component.assign(socket,
+    assign(socket,
       page_title: "Usage Analytics",
       admin_usage_data: usage_data,
       admin_usage_period: period
@@ -116,7 +268,7 @@ defmodule LiteskillWeb.AdminLive do
   end
 
   defp load_tab_data(socket, :admin_users) do
-    Phoenix.Component.assign(socket,
+    assign(socket,
       profile_users: Accounts.list_users(),
       invitations: Accounts.list_invitations(),
       new_invitation_url: nil,
@@ -125,14 +277,14 @@ defmodule LiteskillWeb.AdminLive do
   end
 
   defp load_tab_data(socket, :admin_groups) do
-    Phoenix.Component.assign(socket,
+    assign(socket,
       profile_groups: Groups.list_all_groups(),
       page_title: "Group Management"
     )
   end
 
   defp load_tab_data(socket, :admin_servers) do
-    Phoenix.Component.assign(socket,
+    assign(socket,
       page_title: "Server Management",
       server_settings: Settings.get()
     )
@@ -163,7 +315,7 @@ defmodule LiteskillWeb.AdminLive do
         [:password, :default_permissions, :providers, :models, :rag, :data_sources]
       end
 
-    Phoenix.Component.assign(socket,
+    assign(socket,
       page_title: "Setup Wizard",
       setup_steps: steps,
       setup_step: hd(steps),
@@ -193,7 +345,7 @@ defmodule LiteskillWeb.AdminLive do
   end
 
   defp load_tab_data(socket, :admin_providers) do
-    Phoenix.Component.assign(socket,
+    assign(socket,
       llm_providers: LlmProviders.list_all_providers(),
       editing_llm_provider: nil,
       llm_provider_form: to_form(%{}, as: :llm_provider),
@@ -202,7 +354,7 @@ defmodule LiteskillWeb.AdminLive do
   end
 
   defp load_tab_data(socket, :admin_models) do
-    Phoenix.Component.assign(socket,
+    assign(socket,
       llm_providers: LlmProviders.list_all_providers(),
       llm_models: LlmModels.list_all_models(),
       editing_llm_model: nil,
@@ -212,7 +364,7 @@ defmodule LiteskillWeb.AdminLive do
   end
 
   defp load_tab_data(socket, :admin_roles) do
-    Phoenix.Component.assign(socket,
+    assign(socket,
       rbac_roles: Liteskill.Rbac.list_roles(),
       editing_role: nil,
       role_form: to_form(%{}, as: :role),
@@ -227,9 +379,9 @@ defmodule LiteskillWeb.AdminLive do
     settings = Settings.get()
     embedding_models = LlmModels.list_all_active_models(model_type: "embedding")
     stats = Liteskill.Rag.Pipeline.public_summary()
-    reembed_in_progress = reembed_jobs_in_progress?()
+    reembed_in_progress = Liteskill.Rag.reembed_in_progress?()
 
-    Phoenix.Component.assign(socket,
+    assign(socket,
       page_title: "RAG Settings",
       server_settings: settings,
       rag_embedding_models: embedding_models,
@@ -239,19 +391,6 @@ defmodule LiteskillWeb.AdminLive do
       rag_confirm_input: "",
       rag_selected_model_id: nil,
       rag_reembed_in_progress: reembed_in_progress
-    )
-  end
-
-  defp reembed_jobs_in_progress? do
-    import Ecto.Query
-
-    Liteskill.Repo.exists?(
-      from(j in "oban_jobs",
-        where:
-          j.queue == "rag_ingest" and
-            j.worker == "Liteskill.Rag.ReembedWorker" and
-            j.state in ["available", "executing", "scheduled"]
-      )
     )
   end
 
@@ -3039,7 +3178,7 @@ defmodule LiteskillWeb.AdminLive do
     sources = socket.assigns.setup_sources_to_configure
 
     if next_index >= length(sources) do
-      {:noreply, Phoenix.LiveView.push_navigate(socket, to: ~p"/admin/servers")}
+      {:noreply, push_navigate(socket, to: ~p"/admin/servers")}
     else
       user_id = socket.assigns.current_user.id
       next_source = Enum.at(sources, next_index)
@@ -3051,7 +3190,7 @@ defmodule LiteskillWeb.AdminLive do
         end
 
       {:noreply,
-       Phoenix.Component.assign(socket,
+       assign(socket,
          setup_current_config_index: next_index,
          setup_config_form: to_form(existing_metadata, as: :config)
        )}
@@ -3060,6 +3199,17 @@ defmodule LiteskillWeb.AdminLive do
 
   # --- Setup Wizard Event Handlers ---
 
+  @impl true
+  def handle_event("toggle_sidebar", _params, socket) do
+    {:noreply, assign(socket, sidebar_open: !socket.assigns.sidebar_open)}
+  end
+
+  @impl true
+  def handle_event("select_conversation", %{"id" => id}, socket) do
+    {:noreply, push_navigate(socket, to: "/c/#{id}")}
+  end
+
+  @impl true
   def handle_event("setup_password", %{"setup" => params}, socket) do
     require_admin(socket, fn ->
       password = params["password"]
@@ -3067,11 +3217,11 @@ defmodule LiteskillWeb.AdminLive do
 
       cond do
         password != confirmation ->
-          {:noreply, Phoenix.Component.assign(socket, setup_error: "Passwords do not match")}
+          {:noreply, assign(socket, setup_error: "Passwords do not match")}
 
         String.length(password) < 12 ->
           {:noreply,
-           Phoenix.Component.assign(socket,
+           assign(socket,
              setup_error: "Password must be at least 12 characters"
            )}
 
@@ -3079,7 +3229,7 @@ defmodule LiteskillWeb.AdminLive do
           case Accounts.setup_admin_password(socket.assigns.current_user, password) do
             {:ok, user} ->
               {:noreply,
-               Phoenix.Component.assign(socket,
+               assign(socket,
                  setup_step: :default_permissions,
                  current_user: user,
                  setup_error: nil
@@ -3087,7 +3237,7 @@ defmodule LiteskillWeb.AdminLive do
 
             {:error, reason} ->
               {:noreply,
-               Phoenix.Component.assign(socket,
+               assign(socket,
                  setup_error: action_error("set password", reason)
                )}
           end
@@ -3095,13 +3245,14 @@ defmodule LiteskillWeb.AdminLive do
     end)
   end
 
+  @impl true
   def handle_event("setup_skip_password", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply,
-       Phoenix.Component.assign(socket, setup_step: :default_permissions, setup_error: nil)}
+      {:noreply, assign(socket, setup_step: :default_permissions, setup_error: nil)}
     end)
   end
 
+  @impl true
   def handle_event("setup_toggle_permission", %{"permission" => permission}, socket) do
     require_admin(socket, fn ->
       selected = socket.assigns.setup_selected_permissions
@@ -3111,10 +3262,11 @@ defmodule LiteskillWeb.AdminLive do
           do: MapSet.delete(selected, permission),
           else: MapSet.put(selected, permission)
 
-      {:noreply, Phoenix.Component.assign(socket, setup_selected_permissions: selected)}
+      {:noreply, assign(socket, setup_selected_permissions: selected)}
     end)
   end
 
+  @impl true
   def handle_event("setup_save_permissions", _params, socket) do
     require_admin(socket, fn ->
       permissions = MapSet.to_list(socket.assigns.setup_selected_permissions)
@@ -3122,25 +3274,27 @@ defmodule LiteskillWeb.AdminLive do
 
       case Liteskill.Rbac.update_role(role, %{permissions: permissions}) do
         {:ok, _} ->
-          {:noreply, Phoenix.Component.assign(socket, setup_step: :providers, setup_error: nil)}
+          {:noreply, assign(socket, setup_step: :providers, setup_error: nil)}
 
         {:error, reason} ->
           {:noreply,
-           Phoenix.Component.assign(socket,
+           assign(socket,
              setup_error: action_error("update permissions", reason)
            )}
       end
     end)
   end
 
+  @impl true
   def handle_event("setup_skip_permissions", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply, Phoenix.Component.assign(socket, setup_step: :providers, setup_error: nil)}
+      {:noreply, assign(socket, setup_step: :providers, setup_error: nil)}
     end)
   end
 
   # --- Setup Wizard: OpenRouter OAuth ---
 
+  @impl true
   def handle_event("setup_openrouter_connect", _params, socket) do
     require_admin(socket, fn ->
       if Liteskill.SingleUser.enabled?() do
@@ -3158,29 +3312,31 @@ defmodule LiteskillWeb.AdminLive do
 
         {:noreply,
          socket
-         |> Phoenix.Component.assign(setup_openrouter_pending: true)
-         |> Phoenix.LiveView.push_event("open_external_url", %{url: auth_url})}
+         |> assign(setup_openrouter_pending: true)
+         |> push_event("open_external_url", %{url: auth_url})}
       else
-        {:noreply,
-         Phoenix.LiveView.redirect(socket, to: ~p"/auth/openrouter?return_to=/admin/setup")}
+        {:noreply, redirect(socket, to: ~p"/auth/openrouter?return_to=/admin/setup")}
       end
     end)
   end
 
   # --- Setup Wizard: Providers ---
 
+  @impl true
   def handle_event("setup_providers_show_custom", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply, Phoenix.Component.assign(socket, setup_provider_view: :custom)}
+      {:noreply, assign(socket, setup_provider_view: :custom)}
     end)
   end
 
+  @impl true
   def handle_event("setup_providers_show_presets", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply, Phoenix.Component.assign(socket, setup_provider_view: :presets)}
+      {:noreply, assign(socket, setup_provider_view: :presets)}
     end)
   end
 
+  @impl true
   def handle_event("setup_create_provider", %{"llm_provider" => params}, socket) do
     require_admin(socket, fn ->
       user_id = socket.assigns.current_user.id
@@ -3192,7 +3348,7 @@ defmodule LiteskillWeb.AdminLive do
               providers = LlmProviders.list_all_providers()
 
               {:noreply,
-               Phoenix.Component.assign(socket,
+               assign(socket,
                  setup_llm_providers: providers,
                  setup_llm_provider_form: to_form(%{}, as: :llm_provider),
                  setup_error: nil
@@ -3200,41 +3356,44 @@ defmodule LiteskillWeb.AdminLive do
 
             {:error, changeset} ->
               {:noreply,
-               Phoenix.Component.assign(socket,
+               assign(socket,
                  setup_error: action_error("create provider", changeset)
                )}
           end
 
         {:error, msg} ->
-          {:noreply, Phoenix.Component.assign(socket, setup_error: msg)}
+          {:noreply, assign(socket, setup_error: msg)}
       end
     end)
   end
 
+  @impl true
   def handle_event("setup_providers_continue", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply, Phoenix.Component.assign(socket, setup_step: :models, setup_error: nil)}
+      {:noreply, assign(socket, setup_step: :models, setup_error: nil)}
     end)
   end
 
+  @impl true
   def handle_event("setup_providers_skip", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply, Phoenix.Component.assign(socket, setup_step: :models, setup_error: nil)}
+      {:noreply, assign(socket, setup_step: :models, setup_error: nil)}
     end)
   end
 
   # --- Setup Wizard: OpenRouter Model Search ---
 
+  @impl true
   def handle_event("or_search", %{"or_query" => query}, socket) do
     require_admin(socket, fn ->
       socket =
         if is_nil(socket.assigns.or_models) do
           case Liteskill.OpenRouter.Models.list_models() do
             {:ok, models} ->
-              Phoenix.Component.assign(socket, or_models: models, or_loading: false)
+              assign(socket, or_models: models, or_loading: false)
 
             {:error, _} ->
-              Phoenix.Component.assign(socket, or_models: [], or_loading: false)
+              assign(socket, or_models: [], or_loading: false)
           end
         else
           socket
@@ -3247,10 +3406,11 @@ defmodule LiteskillWeb.AdminLive do
           Liteskill.OpenRouter.Models.search_models(socket.assigns.or_models, query)
         end
 
-      {:noreply, Phoenix.Component.assign(socket, or_search: query, or_results: results)}
+      {:noreply, assign(socket, or_search: query, or_results: results)}
     end)
   end
 
+  @impl true
   def handle_event("or_select_model", %{"model-id" => model_id}, socket) do
     require_admin(socket, fn ->
       user_id = socket.assigns.current_user.id
@@ -3260,7 +3420,7 @@ defmodule LiteskillWeb.AdminLive do
 
       case Enum.find(socket.assigns.or_models || [], &(&1.id == model_id)) do
         nil ->
-          {:noreply, Phoenix.Component.assign(socket, setup_error: "Model not found")}
+          {:noreply, assign(socket, setup_error: "Model not found")}
 
         model ->
           attrs = %{
@@ -3281,7 +3441,7 @@ defmodule LiteskillWeb.AdminLive do
               embedding_models = LlmModels.list_all_active_models(model_type: "embedding")
 
               {:noreply,
-               Phoenix.Component.assign(socket,
+               assign(socket,
                  setup_llm_models: models,
                  setup_rag_embedding_models: embedding_models,
                  or_search: "",
@@ -3291,7 +3451,7 @@ defmodule LiteskillWeb.AdminLive do
 
             {:error, changeset} ->
               {:noreply,
-               Phoenix.Component.assign(socket,
+               assign(socket,
                  setup_error: action_error("add model", changeset)
                )}
           end
@@ -3301,6 +3461,7 @@ defmodule LiteskillWeb.AdminLive do
 
   # --- Setup Wizard: Embedding Catalog ---
 
+  @impl true
   def handle_event("embed_search", %{"embed_query" => query}, socket) do
     require_admin(socket, fn ->
       embed_models = socket.assigns.embed_results_all
@@ -3312,10 +3473,11 @@ defmodule LiteskillWeb.AdminLive do
           Liteskill.EmbeddingCatalog.search_models(embed_models, query)
         end
 
-      {:noreply, Phoenix.Component.assign(socket, embed_search: query, embed_results: results)}
+      {:noreply, assign(socket, embed_search: query, embed_results: results)}
     end)
   end
 
+  @impl true
   def handle_event("embed_select_model", %{"model-id" => model_id}, socket) do
     require_admin(socket, fn ->
       user_id = socket.assigns.current_user.id
@@ -3323,13 +3485,13 @@ defmodule LiteskillWeb.AdminLive do
 
       case Enum.find(socket.assigns.embed_results_all, &(&1.id == model_id)) do
         nil ->
-          {:noreply, Phoenix.Component.assign(socket, setup_error: "Model not found")}
+          {:noreply, assign(socket, setup_error: "Model not found")}
 
         model ->
           case Liteskill.EmbeddingCatalog.resolve_provider(model, providers) do
             :error ->
               {:noreply,
-               Phoenix.Component.assign(socket,
+               assign(socket,
                  setup_error: "No compatible provider configured for this model"
                )}
 
@@ -3352,7 +3514,7 @@ defmodule LiteskillWeb.AdminLive do
                   embedding_models = LlmModels.list_all_active_models(model_type: "embedding")
 
                   {:noreply,
-                   Phoenix.Component.assign(socket,
+                   assign(socket,
                      setup_llm_models: models,
                      setup_rag_embedding_models: embedding_models,
                      embed_search: "",
@@ -3362,7 +3524,7 @@ defmodule LiteskillWeb.AdminLive do
 
                 {:error, changeset} ->
                   {:noreply,
-                   Phoenix.Component.assign(socket,
+                   assign(socket,
                      setup_error: action_error("add embedding model", changeset)
                    )}
               end
@@ -3373,6 +3535,7 @@ defmodule LiteskillWeb.AdminLive do
 
   # --- Setup Wizard: Models ---
 
+  @impl true
   def handle_event("setup_create_model", %{"llm_model" => params}, socket) do
     require_admin(socket, fn ->
       user_id = socket.assigns.current_user.id
@@ -3392,7 +3555,7 @@ defmodule LiteskillWeb.AdminLive do
               embedding_models = LlmModels.list_all_active_models(model_type: "embedding")
 
               {:noreply,
-               Phoenix.Component.assign(socket,
+               assign(socket,
                  setup_llm_models: models,
                  setup_rag_embedding_models: embedding_models,
                  setup_llm_model_form: to_form(%{}, as: :llm_model),
@@ -3401,31 +3564,34 @@ defmodule LiteskillWeb.AdminLive do
 
             {:error, changeset} ->
               {:noreply,
-               Phoenix.Component.assign(socket,
+               assign(socket,
                  setup_error: action_error("create model", changeset)
                )}
           end
 
         {:error, msg} ->
-          {:noreply, Phoenix.Component.assign(socket, setup_error: msg)}
+          {:noreply, assign(socket, setup_error: msg)}
       end
     end)
   end
 
+  @impl true
   def handle_event("setup_models_continue", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply, Phoenix.Component.assign(socket, setup_step: :rag, setup_error: nil)}
+      {:noreply, assign(socket, setup_step: :rag, setup_error: nil)}
     end)
   end
 
+  @impl true
   def handle_event("setup_models_skip", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply, Phoenix.Component.assign(socket, setup_step: :rag, setup_error: nil)}
+      {:noreply, assign(socket, setup_step: :rag, setup_error: nil)}
     end)
   end
 
   # --- Setup Wizard: RAG ---
 
+  @impl true
   def handle_event("setup_select_embedding", %{"model_id" => model_id}, socket) do
     require_admin(socket, fn ->
       model_id = if model_id == "", do: nil, else: model_id
@@ -3433,7 +3599,7 @@ defmodule LiteskillWeb.AdminLive do
       case Settings.update_embedding_model(model_id) do
         {:ok, settings} ->
           {:noreply,
-           Phoenix.Component.assign(socket,
+           assign(socket,
              setup_rag_current_model: settings.embedding_model,
              setup_step: :data_sources,
              setup_error: nil
@@ -3441,21 +3607,23 @@ defmodule LiteskillWeb.AdminLive do
 
         {:error, reason} ->
           {:noreply,
-           Phoenix.Component.assign(socket,
+           assign(socket,
              setup_error: action_error("update embedding model", reason)
            )}
       end
     end)
   end
 
+  @impl true
   def handle_event("setup_rag_skip", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply, Phoenix.Component.assign(socket, setup_step: :data_sources, setup_error: nil)}
+      {:noreply, assign(socket, setup_step: :data_sources, setup_error: nil)}
     end)
   end
 
   # --- Setup Wizard: Data Sources ---
 
+  @impl true
   def handle_event("setup_toggle_source", %{"source-type" => source_type}, socket) do
     require_admin(socket, fn ->
       selected = socket.assigns.setup_selected_sources
@@ -3465,10 +3633,11 @@ defmodule LiteskillWeb.AdminLive do
           do: MapSet.delete(selected, source_type),
           else: MapSet.put(selected, source_type)
 
-      {:noreply, Phoenix.Component.assign(socket, setup_selected_sources: selected)}
+      {:noreply, assign(socket, setup_selected_sources: selected)}
     end)
   end
 
+  @impl true
   def handle_event("setup_save_sources", _params, socket) do
     require_admin(socket, fn ->
       user_id = socket.assigns.current_user.id
@@ -3479,7 +3648,7 @@ defmodule LiteskillWeb.AdminLive do
         Enum.filter(data_sources, &MapSet.member?(selected, &1.source_type))
 
       if sources_to_configure == [] do
-        {:noreply, Phoenix.LiveView.push_navigate(socket, to: ~p"/admin/servers")}
+        {:noreply, push_navigate(socket, to: ~p"/admin/servers")}
       else
         {configured, _error} =
           Enum.reduce(sources_to_configure, {[], nil}, fn source, {acc, err} ->
@@ -3503,7 +3672,7 @@ defmodule LiteskillWeb.AdminLive do
         steps = if :configure_source in steps, do: steps, else: steps ++ [:configure_source]
 
         {:noreply,
-         Phoenix.Component.assign(socket,
+         assign(socket,
            setup_step: :configure_source,
            setup_steps: steps,
            setup_sources_to_configure: sources,
@@ -3514,6 +3683,7 @@ defmodule LiteskillWeb.AdminLive do
     end)
   end
 
+  @impl true
   def handle_event("setup_save_config", %{"config" => config_params}, socket) do
     require_admin(socket, fn ->
       current_source =
@@ -3537,77 +3707,84 @@ defmodule LiteskillWeb.AdminLive do
     end)
   end
 
+  @impl true
   def handle_event("setup_skip_config", _params, socket) do
     require_admin(socket, fn ->
       setup_advance_config(socket)
     end)
   end
 
+  @impl true
   def handle_event("setup_skip_sources", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply, Phoenix.LiveView.push_navigate(socket, to: ~p"/admin/servers")}
+      {:noreply, push_navigate(socket, to: ~p"/admin/servers")}
     end)
   end
 
   # --- Event Handlers (called from ChatLive) ---
 
+  @impl true
   def handle_event("admin_usage_period", %{"period" => period}, socket) do
     require_admin(socket, fn ->
       usage_data = load_usage_data(period)
 
       {:noreply,
-       Phoenix.Component.assign(socket,
+       assign(socket,
          admin_usage_data: usage_data,
          admin_usage_period: period
        )}
     end)
   end
 
+  @impl true
   def handle_event("promote_user", %{"id" => id}, socket) do
     require_admin(socket, fn ->
       Accounts.update_user_role(id, "admin")
-      {:noreply, Phoenix.Component.assign(socket, profile_users: Accounts.list_users())}
+      {:noreply, assign(socket, profile_users: Accounts.list_users())}
     end)
   end
 
+  @impl true
   def handle_event("demote_user", %{"id" => id}, socket) do
     require_admin(socket, fn ->
       Accounts.update_user_role(id, "user")
-      {:noreply, Phoenix.Component.assign(socket, profile_users: Accounts.list_users())}
+      {:noreply, assign(socket, profile_users: Accounts.list_users())}
     end)
   end
 
+  @impl true
   def handle_event("create_group", %{"name" => name}, socket) do
     require_admin(socket, fn ->
       user_id = socket.assigns.current_user.id
       Groups.create_group(name, user_id)
-      {:noreply, Phoenix.Component.assign(socket, profile_groups: Groups.list_all_groups())}
+      {:noreply, assign(socket, profile_groups: Groups.list_all_groups())}
     end)
   end
 
+  @impl true
   def handle_event("admin_delete_group", %{"id" => id}, socket) do
     require_admin(socket, fn ->
       Groups.admin_delete_group(id)
 
       socket =
         if socket.assigns.group_detail && socket.assigns.group_detail.id == id do
-          Phoenix.Component.assign(socket, group_detail: nil, group_members: [])
+          assign(socket, group_detail: nil, group_members: [])
         else
           socket
         end
 
-      {:noreply, Phoenix.Component.assign(socket, profile_groups: Groups.list_all_groups())}
+      {:noreply, assign(socket, profile_groups: Groups.list_all_groups())}
     end)
   end
 
+  @impl true
   def handle_event("view_group", %{"id" => id}, socket) do
     require_admin(socket, fn ->
       case Groups.admin_get_group(id) do
         {:ok, group} ->
           members = Groups.admin_list_members(id)
 
-          {:noreply,
-           Phoenix.Component.assign(socket, group_detail: group, group_members: members)}
+          {:noreply, assign(socket, group_detail: group, group_members: members)}
 
         {:error, _} ->
           {:noreply, socket}
@@ -3615,48 +3792,51 @@ defmodule LiteskillWeb.AdminLive do
     end)
   end
 
+  @impl true
   def handle_event("admin_add_member", %{"email" => email}, socket) do
     require_admin(socket, fn ->
       group = socket.assigns.group_detail
 
       case Accounts.get_user_by_email(email) do
         nil ->
-          {:noreply, Phoenix.LiveView.put_flash(socket, :error, "User not found")}
+          {:noreply, put_flash(socket, :error, "User not found")}
 
         user ->
           case Groups.admin_add_member(group.id, user.id, "member") do
             {:ok, _} ->
               {:noreply,
-               Phoenix.Component.assign(socket,
+               assign(socket,
                  group_members: Groups.admin_list_members(group.id)
                )}
 
             {:error, reason} ->
-              {:noreply,
-               Phoenix.LiveView.put_flash(socket, :error, action_error("add member", reason))}
+              {:noreply, put_flash(socket, :error, action_error("add member", reason))}
           end
       end
     end)
   end
 
+  @impl true
   def handle_event("admin_remove_member", %{"user-id" => user_id}, socket) do
     require_admin(socket, fn ->
       group = socket.assigns.group_detail
       Groups.admin_remove_member(group.id, user_id)
 
-      {:noreply,
-       Phoenix.Component.assign(socket, group_members: Groups.admin_list_members(group.id))}
+      {:noreply, assign(socket, group_members: Groups.admin_list_members(group.id))}
     end)
   end
 
+  @impl true
   def handle_event("show_temp_password_form", %{"id" => id}, socket) do
-    {:noreply, Phoenix.Component.assign(socket, temp_password_user_id: id)}
+    {:noreply, assign(socket, temp_password_user_id: id)}
   end
 
+  @impl true
   def handle_event("cancel_temp_password", _params, socket) do
-    {:noreply, Phoenix.Component.assign(socket, temp_password_user_id: nil)}
+    {:noreply, assign(socket, temp_password_user_id: nil)}
   end
 
+  @impl true
   def handle_event("set_temp_password", %{"user_id" => id, "password" => password}, socket) do
     require_admin(socket, fn ->
       user = Accounts.get_user!(id)
@@ -3665,18 +3845,18 @@ defmodule LiteskillWeb.AdminLive do
         {:ok, _} ->
           {:noreply,
            socket
-           |> Phoenix.Component.assign(
+           |> assign(
              temp_password_user_id: nil,
              profile_users: Accounts.list_users()
            )
-           |> Phoenix.LiveView.put_flash(
+           |> put_flash(
              :info,
              "Temporary password set. User must change it on next login."
            )}
 
         {:error, reason} ->
           {:noreply,
-           Phoenix.LiveView.put_flash(
+           put_flash(
              socket,
              :error,
              action_error("set password", reason)
@@ -3687,30 +3867,31 @@ defmodule LiteskillWeb.AdminLive do
 
   # --- Registration & Invitation event handlers ---
 
+  @impl true
   def handle_event("toggle_registration", _params, socket) do
     require_admin(socket, fn ->
       case Settings.toggle_registration() do
         {:ok, settings} ->
-          {:noreply, Phoenix.Component.assign(socket, server_settings: settings)}
+          {:noreply, assign(socket, server_settings: settings)}
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("toggle registration", reason))}
+          {:noreply, put_flash(socket, :error, action_error("toggle registration", reason))}
       end
     end)
   end
 
+  @impl true
   def handle_event("toggle_allow_private_mcp_urls", _params, socket) do
     require_admin(socket, fn ->
       current = socket.assigns.server_settings.allow_private_mcp_urls || false
 
       case Settings.update(%{allow_private_mcp_urls: !current}) do
         {:ok, settings} ->
-          {:noreply, Phoenix.Component.assign(socket, server_settings: settings)}
+          {:noreply, assign(socket, server_settings: settings)}
 
         {:error, reason} ->
           {:noreply,
-           Phoenix.LiveView.put_flash(
+           put_flash(
              socket,
              :error,
              action_error("toggle private URLs", reason)
@@ -3719,20 +3900,21 @@ defmodule LiteskillWeb.AdminLive do
     end)
   end
 
+  @impl true
   def handle_event("update_mcp_cost_limit", %{"cost_limit" => val}, socket) do
     require_admin(socket, fn ->
       case parse_decimal(val) do
         nil ->
-          {:noreply, Phoenix.LiveView.put_flash(socket, :error, "Invalid cost limit")}
+          {:noreply, put_flash(socket, :error, "Invalid cost limit")}
 
         cost_limit ->
           case Settings.update(%{default_mcp_run_cost_limit: cost_limit}) do
             {:ok, settings} ->
-              {:noreply, Phoenix.Component.assign(socket, server_settings: settings)}
+              {:noreply, assign(socket, server_settings: settings)}
 
             {:error, reason} ->
               {:noreply,
-               Phoenix.LiveView.put_flash(
+               put_flash(
                  socket,
                  :error,
                  action_error("update cost limit", reason)
@@ -3742,6 +3924,7 @@ defmodule LiteskillWeb.AdminLive do
     end)
   end
 
+  @impl true
   def handle_event("create_invitation", %{"email" => email}, socket) do
     require_admin(socket, fn ->
       case Accounts.create_invitation(email, socket.assigns.current_user.id) do
@@ -3750,79 +3933,80 @@ defmodule LiteskillWeb.AdminLive do
 
           {:noreply,
            socket
-           |> Phoenix.Component.assign(
+           |> assign(
              invitations: Accounts.list_invitations(),
              new_invitation_url: url
            )
-           |> Phoenix.LiveView.put_flash(:info, "Invitation created")}
+           |> put_flash(:info, "Invitation created")}
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("create invitation", reason))}
+          {:noreply, put_flash(socket, :error, action_error("create invitation", reason))}
       end
     end)
   end
 
+  @impl true
   def handle_event("revoke_invitation", %{"id" => id}, socket) do
     require_admin(socket, fn ->
       case Accounts.revoke_invitation(id) do
         {:ok, _} ->
           {:noreply,
            socket
-           |> Phoenix.Component.assign(invitations: Accounts.list_invitations())
-           |> Phoenix.LiveView.put_flash(:info, "Invitation revoked")}
+           |> assign(invitations: Accounts.list_invitations())
+           |> put_flash(:info, "Invitation revoked")}
 
         {:error, :already_used} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, "Cannot revoke a used invitation")}
+          {:noreply, put_flash(socket, :error, "Cannot revoke a used invitation")}
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("revoke invitation", reason))}
+          {:noreply, put_flash(socket, :error, action_error("revoke invitation", reason))}
       end
     end)
   end
 
   # --- LLM Provider event handlers ---
 
+  @impl true
   def handle_event("new_llm_provider", _params, socket) do
     require_admin(socket, fn ->
       {:noreply,
-       Phoenix.Component.assign(socket,
+       assign(socket,
          editing_llm_provider: :new,
          llm_provider_form: to_form(%{}, as: :llm_provider)
        )}
     end)
   end
 
+  @impl true
   def handle_event("cancel_llm_provider", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply, Phoenix.Component.assign(socket, editing_llm_provider: nil)}
+      {:noreply, assign(socket, editing_llm_provider: nil)}
     end)
   end
 
+  @impl true
   def handle_event("create_llm_provider", %{"llm_provider" => params}, socket) do
     require_admin(socket, fn ->
       with {:ok, attrs} <- build_provider_attrs(params, socket.assigns.current_user.id),
            {:ok, _provider} <- LlmProviders.create_provider(attrs) do
         {:noreply,
          socket
-         |> Phoenix.Component.assign(
+         |> assign(
            llm_providers: LlmProviders.list_all_providers(),
            editing_llm_provider: nil
          )
-         |> Phoenix.LiveView.put_flash(:info, "Provider created")}
+         |> put_flash(:info, "Provider created")}
       else
         {:error, msg} when is_binary(msg) ->
-          {:noreply, Phoenix.LiveView.put_flash(socket, :error, msg)}
+          {:noreply, put_flash(socket, :error, msg)}
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("create provider", reason))}
+          {:noreply, put_flash(socket, :error, action_error("create provider", reason))}
       end
     end)
   end
 
+  @impl true
   def handle_event("edit_llm_provider", %{"id" => id}, socket) do
     require_admin(socket, fn ->
       case LlmProviders.get_provider_for_admin(id) do
@@ -3842,18 +4026,18 @@ defmodule LiteskillWeb.AdminLive do
           }
 
           {:noreply,
-           Phoenix.Component.assign(socket,
+           assign(socket,
              editing_llm_provider: id,
              llm_provider_form: to_form(form_data, as: :llm_provider)
            )}
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("load provider", reason))}
+          {:noreply, put_flash(socket, :error, action_error("load provider", reason))}
       end
     end)
   end
 
+  @impl true
   def handle_event("update_llm_provider", %{"llm_provider" => params}, socket) do
     require_admin(socket, fn ->
       id = params["id"]
@@ -3863,37 +4047,37 @@ defmodule LiteskillWeb.AdminLive do
              LlmProviders.update_provider(id, socket.assigns.current_user.id, attrs) do
         {:noreply,
          socket
-         |> Phoenix.Component.assign(
+         |> assign(
            llm_providers: LlmProviders.list_all_providers(),
            editing_llm_provider: nil
          )
-         |> Phoenix.LiveView.put_flash(:info, "Provider updated")}
+         |> put_flash(:info, "Provider updated")}
       else
         {:error, msg} when is_binary(msg) ->
-          {:noreply, Phoenix.LiveView.put_flash(socket, :error, msg)}
+          {:noreply, put_flash(socket, :error, msg)}
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("update provider", reason))}
+          {:noreply, put_flash(socket, :error, action_error("update provider", reason))}
       end
     end)
   end
 
+  @impl true
   def handle_event("delete_llm_provider", %{"id" => id}, socket) do
     require_admin(socket, fn ->
       case LlmProviders.delete_provider(id, socket.assigns.current_user.id) do
         {:ok, _} ->
           {:noreply,
            socket
-           |> Phoenix.Component.assign(
+           |> assign(
              llm_providers: LlmProviders.list_all_providers(),
              editing_llm_provider: nil
            )
-           |> Phoenix.LiveView.put_flash(:info, "Provider deleted")}
+           |> put_flash(:info, "Provider deleted")}
 
         {:error, reason} ->
           {:noreply,
-           Phoenix.LiveView.put_flash(
+           put_flash(
              socket,
              :error,
              action_error("delete provider", reason)
@@ -3904,44 +4088,47 @@ defmodule LiteskillWeb.AdminLive do
 
   # --- LLM Model event handlers ---
 
+  @impl true
   def handle_event("new_llm_model", _params, socket) do
     require_admin(socket, fn ->
       {:noreply,
-       Phoenix.Component.assign(socket,
+       assign(socket,
          editing_llm_model: :new,
          llm_model_form: to_form(%{}, as: :llm_model)
        )}
     end)
   end
 
+  @impl true
   def handle_event("cancel_llm_model", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply, Phoenix.Component.assign(socket, editing_llm_model: nil)}
+      {:noreply, assign(socket, editing_llm_model: nil)}
     end)
   end
 
+  @impl true
   def handle_event("create_llm_model", %{"llm_model" => params}, socket) do
     require_admin(socket, fn ->
       with {:ok, attrs} <- build_model_attrs(params, socket.assigns.current_user.id),
            {:ok, _model} <- LlmModels.create_model(attrs) do
         {:noreply,
          socket
-         |> Phoenix.Component.assign(
+         |> assign(
            llm_models: LlmModels.list_all_models(),
            editing_llm_model: nil
          )
-         |> Phoenix.LiveView.put_flash(:info, "Model created")}
+         |> put_flash(:info, "Model created")}
       else
         {:error, msg} when is_binary(msg) ->
-          {:noreply, Phoenix.LiveView.put_flash(socket, :error, msg)}
+          {:noreply, put_flash(socket, :error, msg)}
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("create model", reason))}
+          {:noreply, put_flash(socket, :error, action_error("create model", reason))}
       end
     end)
   end
 
+  @impl true
   def handle_event("edit_llm_model", %{"id" => id}, socket) do
     require_admin(socket, fn ->
       case LlmModels.get_model_for_admin(id) do
@@ -3964,18 +4151,18 @@ defmodule LiteskillWeb.AdminLive do
           }
 
           {:noreply,
-           Phoenix.Component.assign(socket,
+           assign(socket,
              editing_llm_model: id,
              llm_model_form: to_form(form_data, as: :llm_model)
            )}
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("load model", reason))}
+          {:noreply, put_flash(socket, :error, action_error("load model", reason))}
       end
     end)
   end
 
+  @impl true
   def handle_event("update_llm_model", %{"llm_model" => params}, socket) do
     require_admin(socket, fn ->
       id = params["id"]
@@ -3984,59 +4171,61 @@ defmodule LiteskillWeb.AdminLive do
            {:ok, _model} <- LlmModels.update_model(id, socket.assigns.current_user.id, attrs) do
         {:noreply,
          socket
-         |> Phoenix.Component.assign(
+         |> assign(
            llm_models: LlmModels.list_all_models(),
            editing_llm_model: nil
          )
-         |> Phoenix.LiveView.put_flash(:info, "Model updated")}
+         |> put_flash(:info, "Model updated")}
       else
         {:error, msg} when is_binary(msg) ->
-          {:noreply, Phoenix.LiveView.put_flash(socket, :error, msg)}
+          {:noreply, put_flash(socket, :error, msg)}
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("update model", reason))}
+          {:noreply, put_flash(socket, :error, action_error("update model", reason))}
       end
     end)
   end
 
+  @impl true
   def handle_event("delete_llm_model", %{"id" => id}, socket) do
     require_admin(socket, fn ->
       case LlmModels.delete_model(id, socket.assigns.current_user.id) do
         {:ok, _} ->
           {:noreply,
            socket
-           |> Phoenix.Component.assign(
+           |> assign(
              llm_models: LlmModels.list_all_models(),
              editing_llm_model: nil
            )
-           |> Phoenix.LiveView.put_flash(:info, "Model deleted")}
+           |> put_flash(:info, "Model deleted")}
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("delete model", reason))}
+          {:noreply, put_flash(socket, :error, action_error("delete model", reason))}
       end
     end)
   end
 
   # --- Role event handlers ---
 
+  @impl true
   def handle_event("new_role", _params, socket) do
     require_admin(socket, fn ->
       {:noreply,
-       Phoenix.Component.assign(socket,
+       assign(socket,
          editing_role: :new,
          role_form: to_form(%{}, as: :role)
        )}
     end)
   end
 
+  @impl true
   def handle_event("cancel_role", _params, socket) do
     require_admin(socket, fn ->
-      {:noreply, Phoenix.Component.assign(socket, editing_role: nil)}
+      {:noreply, assign(socket, editing_role: nil)}
     end)
   end
 
+  @impl true
   def handle_event("edit_role", %{"id" => id}, socket) do
     require_admin(socket, fn ->
       case Liteskill.Rbac.get_role(id) do
@@ -4048,7 +4237,7 @@ defmodule LiteskillWeb.AdminLive do
           }
 
           {:noreply,
-           Phoenix.Component.assign(socket,
+           assign(socket,
              editing_role: role,
              role_form: to_form(form_data, as: :role),
              role_users: Liteskill.Rbac.list_role_users(role.id),
@@ -4056,12 +4245,12 @@ defmodule LiteskillWeb.AdminLive do
            )}
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("load role", reason))}
+          {:noreply, put_flash(socket, :error, action_error("load role", reason))}
       end
     end)
   end
 
+  @impl true
   def handle_event("create_role", %{"role" => params}, socket) do
     require_admin(socket, fn ->
       attrs = %{
@@ -4074,19 +4263,20 @@ defmodule LiteskillWeb.AdminLive do
         {:ok, _} ->
           {:noreply,
            socket
-           |> Phoenix.Component.assign(
+           |> assign(
              rbac_roles: Liteskill.Rbac.list_roles(),
              editing_role: nil
            )
-           |> Phoenix.LiveView.put_flash(:info, "Role created")}
+           |> put_flash(:info, "Role created")}
 
         {:error, changeset} ->
           msg = format_changeset(changeset)
-          {:noreply, Phoenix.LiveView.put_flash(socket, :error, msg)}
+          {:noreply, put_flash(socket, :error, msg)}
       end
     end)
   end
 
+  @impl true
   def handle_event("update_role", %{"role" => params}, socket) do
     require_admin(socket, fn ->
       role = socket.assigns.editing_role
@@ -4101,7 +4291,7 @@ defmodule LiteskillWeb.AdminLive do
         {:ok, updated} ->
           {:noreply,
            socket
-           |> Phoenix.Component.assign(
+           |> assign(
              rbac_roles: Liteskill.Rbac.list_roles(),
              editing_role: updated,
              role_form:
@@ -4114,15 +4304,16 @@ defmodule LiteskillWeb.AdminLive do
                  as: :role
                )
            )
-           |> Phoenix.LiveView.put_flash(:info, "Role updated")}
+           |> put_flash(:info, "Role updated")}
 
         {:error, changeset} ->
           msg = format_changeset(changeset)
-          {:noreply, Phoenix.LiveView.put_flash(socket, :error, msg)}
+          {:noreply, put_flash(socket, :error, msg)}
       end
     end)
   end
 
+  @impl true
   def handle_event("delete_role", %{"id" => id}, socket) do
     require_admin(socket, fn ->
       case Liteskill.Rbac.get_role(id) do
@@ -4131,46 +4322,45 @@ defmodule LiteskillWeb.AdminLive do
             {:ok, _} ->
               {:noreply,
                socket
-               |> Phoenix.Component.assign(
+               |> assign(
                  rbac_roles: Liteskill.Rbac.list_roles(),
                  editing_role: nil
                )
-               |> Phoenix.LiveView.put_flash(:info, "Role deleted")}
+               |> put_flash(:info, "Role deleted")}
 
             {:error, :cannot_delete_system_role} ->
-              {:noreply, Phoenix.LiveView.put_flash(socket, :error, "Cannot delete system roles")}
+              {:noreply, put_flash(socket, :error, "Cannot delete system roles")}
 
             {:error, reason} ->
-              {:noreply,
-               Phoenix.LiveView.put_flash(socket, :error, action_error("delete role", reason))}
+              {:noreply, put_flash(socket, :error, action_error("delete role", reason))}
           end
 
         {:error, reason} ->
-          {:noreply,
-           Phoenix.LiveView.put_flash(socket, :error, action_error("load role", reason))}
+          {:noreply, put_flash(socket, :error, action_error("load role", reason))}
       end
     end)
   end
 
+  @impl true
   def handle_event("assign_role_user", %{"email" => email}, socket) do
     require_admin(socket, fn ->
       role = socket.assigns.editing_role
 
       case Accounts.get_user_by_email(email) do
         nil ->
-          {:noreply, Phoenix.LiveView.put_flash(socket, :error, "User not found")}
+          {:noreply, put_flash(socket, :error, "User not found")}
 
         user ->
           case Liteskill.Rbac.assign_role_to_user(user.id, role.id) do
             {:ok, _} ->
               {:noreply,
-               Phoenix.Component.assign(socket,
+               assign(socket,
                  role_users: Liteskill.Rbac.list_role_users(role.id)
                )}
 
             {:error, reason} ->
               {:noreply,
-               Phoenix.LiveView.put_flash(
+               put_flash(
                  socket,
                  :error,
                  action_error("assign role to user", reason)
@@ -4180,6 +4370,7 @@ defmodule LiteskillWeb.AdminLive do
     end)
   end
 
+  @impl true
   def handle_event("remove_role_user", %{"user-id" => user_id}, socket) do
     require_admin(socket, fn ->
       role = socket.assigns.editing_role
@@ -4187,13 +4378,13 @@ defmodule LiteskillWeb.AdminLive do
       case Liteskill.Rbac.remove_role_from_user(user_id, role.id) do
         {:ok, _} ->
           {:noreply,
-           Phoenix.Component.assign(socket,
+           assign(socket,
              role_users: Liteskill.Rbac.list_role_users(role.id)
            )}
 
         {:error, :cannot_remove_root_admin} ->
           {:noreply,
-           Phoenix.LiveView.put_flash(
+           put_flash(
              socket,
              :error,
              "Cannot remove Instance Admin from root admin"
@@ -4201,7 +4392,7 @@ defmodule LiteskillWeb.AdminLive do
 
         {:error, reason} ->
           {:noreply,
-           Phoenix.LiveView.put_flash(
+           put_flash(
              socket,
              :error,
              action_error("remove user from role", reason)
@@ -4210,25 +4401,26 @@ defmodule LiteskillWeb.AdminLive do
     end)
   end
 
+  @impl true
   def handle_event("assign_role_group", %{"group_name" => name}, socket) do
     require_admin(socket, fn ->
       role = socket.assigns.editing_role
 
       case Groups.admin_get_group_by_name(name) do
         nil ->
-          {:noreply, Phoenix.LiveView.put_flash(socket, :error, "Group not found")}
+          {:noreply, put_flash(socket, :error, "Group not found")}
 
         group ->
           case Liteskill.Rbac.assign_role_to_group(group.id, role.id) do
             {:ok, _} ->
               {:noreply,
-               Phoenix.Component.assign(socket,
+               assign(socket,
                  role_groups: Liteskill.Rbac.list_role_groups(role.id)
                )}
 
             {:error, reason} ->
               {:noreply,
-               Phoenix.LiveView.put_flash(
+               put_flash(
                  socket,
                  :error,
                  action_error("assign role to group", reason)
@@ -4238,6 +4430,7 @@ defmodule LiteskillWeb.AdminLive do
     end)
   end
 
+  @impl true
   def handle_event("remove_role_group", %{"group-id" => group_id}, socket) do
     require_admin(socket, fn ->
       role = socket.assigns.editing_role
@@ -4245,13 +4438,13 @@ defmodule LiteskillWeb.AdminLive do
       case Liteskill.Rbac.remove_role_from_group(group_id, role.id) do
         {:ok, _} ->
           {:noreply,
-           Phoenix.Component.assign(socket,
+           assign(socket,
              role_groups: Liteskill.Rbac.list_role_groups(role.id)
            )}
 
         {:error, reason} ->
           {:noreply,
-           Phoenix.LiveView.put_flash(
+           put_flash(
              socket,
              :error,
              action_error("remove group from role", reason)
@@ -4262,6 +4455,7 @@ defmodule LiteskillWeb.AdminLive do
 
   # --- RAG Tab Event Handlers ---
 
+  @impl true
   def handle_event("rag_select_model", %{"model_id" => model_id}, socket) do
     require_admin(socket, fn ->
       current_id =
@@ -4273,11 +4467,10 @@ defmodule LiteskillWeb.AdminLive do
       selected_id = if model_id == "", do: nil, else: model_id
 
       if selected_id == current_id do
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :info, "Model is already set to this value")}
+        {:noreply, put_flash(socket, :info, "Model is already set to this value")}
       else
         {:noreply,
-         Phoenix.Component.assign(socket,
+         assign(socket,
            rag_confirm_change: true,
            rag_confirm_input: "",
            rag_selected_model_id: selected_id
@@ -4286,23 +4479,26 @@ defmodule LiteskillWeb.AdminLive do
     end)
   end
 
+  @impl true
   def handle_event("rag_cancel_change", _params, socket) do
     {:noreply,
-     Phoenix.Component.assign(socket,
+     assign(socket,
        rag_confirm_change: false,
        rag_confirm_input: "",
        rag_selected_model_id: nil
      )}
   end
 
+  @impl true
   def handle_event("rag_confirm_input_change", %{"value" => value}, socket) do
-    {:noreply, Phoenix.Component.assign(socket, rag_confirm_input: value)}
+    {:noreply, assign(socket, rag_confirm_input: value)}
   end
 
+  @impl true
   def handle_event("rag_confirm_model_change", %{"confirmation" => confirmation}, socket) do
     require_admin(socket, fn ->
       if confirmation != "I know what this means and I am very sure" do
-        {:noreply, Phoenix.LiveView.put_flash(socket, :error, "Confirmation text does not match")}
+        {:noreply, put_flash(socket, :error, "Confirmation text does not match")}
       else
         selected_id = socket.assigns.rag_selected_model_id
         user_id = socket.assigns.current_user.id
@@ -4319,7 +4515,7 @@ defmodule LiteskillWeb.AdminLive do
             socket =
               socket
               |> load_tab_data(:admin_rag)
-              |> Phoenix.LiveView.put_flash(
+              |> put_flash(
                 :info,
                 if(selected_id,
                   do: "Embedding model updated. Re-embedding started.",
@@ -4331,7 +4527,7 @@ defmodule LiteskillWeb.AdminLive do
 
           {:error, reason} ->
             {:noreply,
-             Phoenix.LiveView.put_flash(
+             put_flash(
                socket,
                :error,
                action_error("update embedding model", reason)
@@ -4341,10 +4537,37 @@ defmodule LiteskillWeb.AdminLive do
     end)
   end
 
+  # --- Profile Event Delegation (for settings_account) ---
+
+  @profile_events ~w(change_password set_accent_color
+    user_new_provider user_cancel_provider user_create_provider
+    user_edit_provider user_update_provider user_delete_provider
+    user_new_model user_cancel_model user_create_model
+    user_edit_model user_update_model user_delete_model)
+
+  @impl true
+  def handle_event(event, params, socket) when event in @profile_events do
+    ProfileLive.handle_event(event, params, socket)
+  end
+
+  # --- handle_info callbacks ---
+
+  @impl true
+  def handle_info(:openrouter_connected, socket) do
+    {:noreply,
+     assign(socket,
+       setup_openrouter_pending: false,
+       setup_llm_providers: Liteskill.LlmProviders.list_all_providers()
+     )}
+  end
+
+  @impl true
+  def handle_info(_msg, socket), do: {:noreply, socket}
+
   defp load_embed_models(socket) do
     providers = socket.assigns.setup_llm_providers
     models = fetch_embed_models(providers)
-    Phoenix.Component.assign(socket, embed_results_all: models, embed_results: models)
+    assign(socket, embed_results_all: models, embed_results: models)
   end
 
   defp fetch_embed_models(providers) do

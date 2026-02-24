@@ -143,7 +143,7 @@ defmodule Liteskill.Teams do
 
   # --- Private ---
 
-  defp authorize_owner(entity, user_id), do: Authorization.authorize_owner(entity, user_id)
+  defdelegate authorize_owner(entity, user_id), to: Authorization
 
   defp authorize_team_owner(team_definition_id, user_id) do
     case Repo.get(TeamDefinition, team_definition_id) do

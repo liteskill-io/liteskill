@@ -73,7 +73,7 @@ defmodule LiteskillWeb.Markdown do
       Regex.scan(@uuid_re, html)
       |> Enum.reduce({html, 1}, fn [full_match, uuid], {acc, n} ->
         replacement =
-          ~s(<button class="rag-cite" phx-click="show_source" phx-value-doc-id="#{uuid}">#{n}</button>)
+          ~s(<button class="rag-cite" phx-click="show_source" phx-value-doc-id="#{html_escape_attr(uuid)}">#{n}</button>)
 
         {String.replace(acc, full_match, replacement, global: false), n + 1}
       end)
@@ -222,6 +222,14 @@ defmodule LiteskillWeb.Markdown do
     end)
   end
 
+  defp html_escape_attr(value) do
+    value
+    |> Phoenix.HTML.Safe.to_iodata()
+    |> IO.iodata_to_binary()
+    |> String.replace("\"", "&quot;")
+    |> String.replace("'", "&#39;")
+  end
+
   # Build the <div> with phx-hook for the JsonRender LiveView hook.
   # For JSONL (```spec), content is multi-line JSONL patches — validate at
   # least one line is parseable JSON.
@@ -239,7 +247,7 @@ defmodule LiteskillWeb.Markdown do
 
     if has_valid_line do
       dom_id = "jr-#{id}"
-      escaped = content |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
+      escaped = html_escape_attr(content)
 
       ~s(<div id="#{dom_id}" phx-hook="JsonRender" phx-update="ignore" data-format="jsonl" data-spec="#{escaped}"></div>)
     else
@@ -252,7 +260,7 @@ defmodule LiteskillWeb.Markdown do
     case Jason.decode(content) do
       {:ok, _} ->
         dom_id = "jr-#{id}"
-        escaped = content |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
+        escaped = html_escape_attr(content)
 
         ~s(<div id="#{dom_id}" phx-hook="JsonRender" phx-update="ignore" data-spec="#{escaped}"></div>)
 

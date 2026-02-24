@@ -5,9 +5,12 @@ defmodule LiteskillWeb.ProfileLive do
   LLM provider/model management.
   """
 
-  use LiteskillWeb, :html
+  use LiteskillWeb, :live_view
 
   import LiteskillWeb.FormatHelpers
+
+  alias Liteskill.Chat
+  alias LiteskillWeb.Layouts
 
   alias Liteskill.Accounts
   alias Liteskill.Accounts.User
@@ -35,12 +38,78 @@ defmodule LiteskillWeb.ProfileLive do
     ]
   end
 
+  # --- LiveView callbacks ---
+
+  @impl true
+  def mount(_params, _session, socket) do
+    conversations = Chat.list_conversations(socket.assigns.current_user.id)
+
+    {:ok,
+     socket
+     |> assign(profile_assigns())
+     |> assign(
+       conversations: conversations,
+       conversation: nil,
+       sidebar_open: true,
+       has_admin_access: Liteskill.Rbac.has_any_admin_permission?(socket.assigns.current_user.id),
+       single_user_mode: Liteskill.SingleUser.enabled?()
+     ), layout: {LiteskillWeb.Layouts, :chat}}
+  end
+
+  @impl true
+  def handle_params(_params, _uri, socket) do
+    if socket.assigns.current_user.force_password_change &&
+         socket.assigns.live_action != :password do
+      {:noreply, push_navigate(socket, to: ~p"/profile/password")}
+    else
+      {:noreply, apply_action(socket, socket.assigns.live_action)}
+    end
+  end
+
+  defp apply_action(socket, action) when action in @profile_actions do
+    apply_profile_action(socket, action, socket.assigns.current_user)
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div class="flex h-screen relative">
+      <Layouts.sidebar
+        sidebar_open={@sidebar_open}
+        live_action={@live_action}
+        conversations={@conversations}
+        active_conversation_id={nil}
+        current_user={@current_user}
+        has_admin_access={@has_admin_access}
+        single_user_mode={@single_user_mode}
+      />
+
+      <main class="flex-1 flex flex-col min-w-0">
+        <.profile
+          live_action={@live_action}
+          current_user={@current_user}
+          sidebar_open={@sidebar_open}
+          password_form={@password_form}
+          password_error={@password_error}
+          password_success={@password_success}
+          user_llm_providers={@user_llm_providers}
+          user_editing_provider={@user_editing_provider}
+          user_provider_form={@user_provider_form}
+          user_llm_models={@user_llm_models}
+          user_editing_model={@user_editing_model}
+          user_model_form={@user_model_form}
+        />
+      </main>
+    </div>
+    """
+  end
+
   def apply_profile_action(socket, action, _user) do
     load_tab_data(socket, action)
   end
 
   defp load_tab_data(socket, :password) do
-    Phoenix.Component.assign(socket,
+    assign(socket,
       page_title: "Change Password",
       password_error: nil,
       password_success: false
@@ -50,7 +119,7 @@ defmodule LiteskillWeb.ProfileLive do
   defp load_tab_data(socket, :user_providers) do
     user_id = socket.assigns.current_user.id
 
-    Phoenix.Component.assign(socket,
+    assign(socket,
       page_title: "My Providers",
       user_llm_providers: LlmProviders.list_owned_providers(user_id),
       user_editing_provider: nil
@@ -60,7 +129,7 @@ defmodule LiteskillWeb.ProfileLive do
   defp load_tab_data(socket, :user_models) do
     user_id = socket.assigns.current_user.id
 
-    Phoenix.Component.assign(socket,
+    assign(socket,
       page_title: "My Models",
       user_llm_providers: LlmProviders.list_owned_providers(user_id),
       user_llm_models: LlmModels.list_owned_models(user_id),
@@ -69,7 +138,7 @@ defmodule LiteskillWeb.ProfileLive do
   end
 
   defp load_tab_data(socket, _action) do
-    Phoenix.Component.assign(socket, page_title: "Profile")
+    assign(socket, page_title: "Profile")
   end
 
   # --- Public component ---
@@ -700,8 +769,19 @@ defmodule LiteskillWeb.ProfileLive do
 
   defp color_label(color), do: color |> String.replace("-", " ") |> String.capitalize()
 
-  # --- Event Handlers (called from ChatLive) ---
+  # --- Event Handlers ---
 
+  @impl true
+  def handle_event("toggle_sidebar", _params, socket) do
+    {:noreply, assign(socket, sidebar_open: !socket.assigns.sidebar_open)}
+  end
+
+  @impl true
+  def handle_event("select_conversation", %{"id" => id}, socket) do
+    {:noreply, push_navigate(socket, to: "/c/#{id}")}
+  end
+
+  @impl true
   def handle_event("change_password", %{"password" => params}, socket) do
     current = params["current"]
     new_pass = params["new"]
@@ -710,14 +790,14 @@ defmodule LiteskillWeb.ProfileLive do
     cond do
       new_pass != confirm ->
         {:noreply,
-         Phoenix.Component.assign(socket,
+         assign(socket,
            password_error: "Passwords do not match",
            password_success: false
          )}
 
       String.length(new_pass) < 12 ->
         {:noreply,
-         Phoenix.Component.assign(socket,
+         assign(socket,
            password_error: "New password must be at least 12 characters",
            password_success: false
          )}
@@ -727,7 +807,7 @@ defmodule LiteskillWeb.ProfileLive do
           {:ok, user} ->
             {:noreply,
              socket
-             |> Phoenix.Component.assign(
+             |> assign(
                current_user: user,
                password_error: nil,
                password_success: true,
@@ -737,14 +817,14 @@ defmodule LiteskillWeb.ProfileLive do
 
           {:error, :invalid_current_password} ->
             {:noreply,
-             Phoenix.Component.assign(socket,
+             assign(socket,
                password_error: "Current password is incorrect",
                password_success: false
              )}
 
           {:error, _changeset} ->
             {:noreply,
-             Phoenix.Component.assign(socket,
+             assign(socket,
                password_error: "Failed to change password",
                password_success: false
              )}
@@ -752,6 +832,7 @@ defmodule LiteskillWeb.ProfileLive do
     end
   end
 
+  @impl true
   def handle_event("set_accent_color", %{"color" => color}, socket) do
     user = socket.assigns.current_user
 
@@ -759,7 +840,7 @@ defmodule LiteskillWeb.ProfileLive do
       {:ok, updated_user} ->
         {:noreply,
          socket
-         |> Phoenix.Component.assign(current_user: updated_user)
+         |> assign(current_user: updated_user)
          |> Phoenix.LiveView.push_event("set-accent", %{color: color})}
 
       {:error, _} ->
@@ -769,18 +850,21 @@ defmodule LiteskillWeb.ProfileLive do
 
   # --- User Provider Event Handlers ---
 
+  @impl true
   def handle_event("user_new_provider", _params, socket) do
     {:noreply,
-     Phoenix.Component.assign(socket,
+     assign(socket,
        user_editing_provider: :new,
        user_provider_form: to_form(%{}, as: :user_provider)
      )}
   end
 
+  @impl true
   def handle_event("user_cancel_provider", _params, socket) do
-    {:noreply, Phoenix.Component.assign(socket, user_editing_provider: nil)}
+    {:noreply, assign(socket, user_editing_provider: nil)}
   end
 
+  @impl true
   def handle_event("user_create_provider", %{"user_provider" => params}, socket) do
     user_id = socket.assigns.current_user.id
 
@@ -789,21 +873,21 @@ defmodule LiteskillWeb.ProfileLive do
          {:ok, _provider} <- LlmProviders.create_provider(attrs) do
       {:noreply,
        socket
-       |> Phoenix.Component.assign(
+       |> assign(
          user_llm_providers: LlmProviders.list_owned_providers(user_id),
          user_editing_provider: nil
        )
-       |> Phoenix.LiveView.put_flash(:info, "Provider created")}
+       |> put_flash(:info, "Provider created")}
     else
       {:error, msg} when is_binary(msg) ->
-        {:noreply, Phoenix.LiveView.put_flash(socket, :error, msg)}
+        {:noreply, put_flash(socket, :error, msg)}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("create provider", reason))}
+        {:noreply, put_flash(socket, :error, action_error("create provider", reason))}
     end
   end
 
+  @impl true
   def handle_event("user_edit_provider", %{"id" => id}, socket) do
     user_id = socket.assigns.current_user.id
 
@@ -823,17 +907,17 @@ defmodule LiteskillWeb.ProfileLive do
         }
 
         {:noreply,
-         Phoenix.Component.assign(socket,
+         assign(socket,
            user_editing_provider: id,
            user_provider_form: to_form(form_data, as: :user_provider)
          )}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("load provider", reason))}
+        {:noreply, put_flash(socket, :error, action_error("load provider", reason))}
     end
   end
 
+  @impl true
   def handle_event("user_update_provider", %{"user_provider" => params}, socket) do
     user_id = socket.assigns.current_user.id
     id = params["id"]
@@ -843,21 +927,21 @@ defmodule LiteskillWeb.ProfileLive do
          {:ok, _provider} <- LlmProviders.update_provider(id, user_id, attrs) do
       {:noreply,
        socket
-       |> Phoenix.Component.assign(
+       |> assign(
          user_llm_providers: LlmProviders.list_owned_providers(user_id),
          user_editing_provider: nil
        )
-       |> Phoenix.LiveView.put_flash(:info, "Provider updated")}
+       |> put_flash(:info, "Provider updated")}
     else
       {:error, msg} when is_binary(msg) ->
-        {:noreply, Phoenix.LiveView.put_flash(socket, :error, msg)}
+        {:noreply, put_flash(socket, :error, msg)}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("update provider", reason))}
+        {:noreply, put_flash(socket, :error, action_error("update provider", reason))}
     end
   end
 
+  @impl true
   def handle_event("user_delete_provider", %{"id" => id}, socket) do
     user_id = socket.assigns.current_user.id
 
@@ -865,32 +949,34 @@ defmodule LiteskillWeb.ProfileLive do
       {:ok, _} ->
         {:noreply,
          socket
-         |> Phoenix.Component.assign(
+         |> assign(
            user_llm_providers: LlmProviders.list_owned_providers(user_id),
            user_editing_provider: nil
          )
-         |> Phoenix.LiveView.put_flash(:info, "Provider deleted")}
+         |> put_flash(:info, "Provider deleted")}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("delete provider", reason))}
+        {:noreply, put_flash(socket, :error, action_error("delete provider", reason))}
     end
   end
 
   # --- User Model Event Handlers ---
 
+  @impl true
   def handle_event("user_new_model", _params, socket) do
     {:noreply,
-     Phoenix.Component.assign(socket,
+     assign(socket,
        user_editing_model: :new,
        user_model_form: to_form(%{}, as: :user_model)
      )}
   end
 
+  @impl true
   def handle_event("user_cancel_model", _params, socket) do
-    {:noreply, Phoenix.Component.assign(socket, user_editing_model: nil)}
+    {:noreply, assign(socket, user_editing_model: nil)}
   end
 
+  @impl true
   def handle_event("user_create_model", %{"user_model" => params}, socket) do
     user_id = socket.assigns.current_user.id
 
@@ -899,21 +985,21 @@ defmodule LiteskillWeb.ProfileLive do
          {:ok, _model} <- LlmModels.create_model(attrs) do
       {:noreply,
        socket
-       |> Phoenix.Component.assign(
+       |> assign(
          user_llm_models: LlmModels.list_owned_models(user_id),
          user_editing_model: nil
        )
-       |> Phoenix.LiveView.put_flash(:info, "Model created")}
+       |> put_flash(:info, "Model created")}
     else
       {:error, msg} when is_binary(msg) ->
-        {:noreply, Phoenix.LiveView.put_flash(socket, :error, msg)}
+        {:noreply, put_flash(socket, :error, msg)}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("create model", reason))}
+        {:noreply, put_flash(socket, :error, action_error("create model", reason))}
     end
   end
 
+  @impl true
   def handle_event("user_edit_model", %{"id" => id}, socket) do
     user_id = socket.assigns.current_user.id
 
@@ -938,16 +1024,17 @@ defmodule LiteskillWeb.ProfileLive do
         }
 
         {:noreply,
-         Phoenix.Component.assign(socket,
+         assign(socket,
            user_editing_model: id,
            user_model_form: to_form(form_data, as: :user_model)
          )}
 
       {:error, reason} ->
-        {:noreply, Phoenix.LiveView.put_flash(socket, :error, action_error("load model", reason))}
+        {:noreply, put_flash(socket, :error, action_error("load model", reason))}
     end
   end
 
+  @impl true
   def handle_event("user_update_model", %{"user_model" => params}, socket) do
     user_id = socket.assigns.current_user.id
     id = params["id"]
@@ -957,21 +1044,21 @@ defmodule LiteskillWeb.ProfileLive do
          {:ok, _model} <- LlmModels.update_model(id, user_id, attrs) do
       {:noreply,
        socket
-       |> Phoenix.Component.assign(
+       |> assign(
          user_llm_models: LlmModels.list_owned_models(user_id),
          user_editing_model: nil
        )
-       |> Phoenix.LiveView.put_flash(:info, "Model updated")}
+       |> put_flash(:info, "Model updated")}
     else
       {:error, msg} when is_binary(msg) ->
-        {:noreply, Phoenix.LiveView.put_flash(socket, :error, msg)}
+        {:noreply, put_flash(socket, :error, msg)}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("update model", reason))}
+        {:noreply, put_flash(socket, :error, action_error("update model", reason))}
     end
   end
 
+  @impl true
   def handle_event("user_delete_model", %{"id" => id}, socket) do
     user_id = socket.assigns.current_user.id
 
@@ -979,15 +1066,17 @@ defmodule LiteskillWeb.ProfileLive do
       {:ok, _} ->
         {:noreply,
          socket
-         |> Phoenix.Component.assign(
+         |> assign(
            user_llm_models: LlmModels.list_owned_models(user_id),
            user_editing_model: nil
          )
-         |> Phoenix.LiveView.put_flash(:info, "Model deleted")}
+         |> put_flash(:info, "Model deleted")}
 
       {:error, reason} ->
-        {:noreply,
-         Phoenix.LiveView.put_flash(socket, :error, action_error("delete model", reason))}
+        {:noreply, put_flash(socket, :error, action_error("delete model", reason))}
     end
   end
+
+  @impl true
+  def handle_info(_msg, socket), do: {:noreply, socket}
 end

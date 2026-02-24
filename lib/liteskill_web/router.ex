@@ -61,16 +61,23 @@ defmodule LiteskillWeb.Router do
 
     live_session :admin,
       on_mount: [{LiteskillWeb.Plugs.LiveAuth, :require_admin}] do
-      live "/admin", ChatLive, :admin_usage
-      live "/admin/usage", ChatLive, :admin_usage
-      live "/admin/servers", ChatLive, :admin_servers
-      live "/admin/users", ChatLive, :admin_users
-      live "/admin/groups", ChatLive, :admin_groups
-      live "/admin/providers", ChatLive, :admin_providers
-      live "/admin/models", ChatLive, :admin_models
-      live "/admin/roles", ChatLive, :admin_roles
-      live "/admin/rag", ChatLive, :admin_rag
-      live "/admin/setup", ChatLive, :admin_setup
+      live "/admin", AdminLive, :admin_usage
+      live "/admin/usage", AdminLive, :admin_usage
+      live "/admin/servers", AdminLive, :admin_servers
+      live "/admin/users", AdminLive, :admin_users
+      live "/admin/groups", AdminLive, :admin_groups
+      live "/admin/providers", AdminLive, :admin_providers
+      live "/admin/models", AdminLive, :admin_models
+      live "/admin/roles", AdminLive, :admin_roles
+      live "/admin/rag", AdminLive, :admin_rag
+      live "/admin/setup", AdminLive, :admin_setup
+      # Settings routes (single-user mode unified settings page)
+      live "/settings", AdminLive, :settings_usage
+      live "/settings/general", AdminLive, :settings_general
+      live "/settings/providers", AdminLive, :settings_providers
+      live "/settings/models", AdminLive, :settings_models
+      live "/settings/rag", AdminLive, :settings_rag
+      live "/settings/account", AdminLive, :settings_account
     end
   end
 
@@ -90,42 +97,35 @@ defmodule LiteskillWeb.Router do
       live "/", ChatLive, :index
       live "/conversations", ChatLive, :conversations
       live "/c/:conversation_id", ChatLive, :show
-      live "/profile", ChatLive, :info
-      live "/profile/password", ChatLive, :password
-      live "/profile/providers", ChatLive, :user_providers
-      live "/profile/models", ChatLive, :user_models
-      # Settings routes (single-user mode unified settings page)
-      live "/settings", ChatLive, :settings_usage
-      live "/settings/general", ChatLive, :settings_general
-      live "/settings/providers", ChatLive, :settings_providers
-      live "/settings/models", ChatLive, :settings_models
-      live "/settings/rag", ChatLive, :settings_rag
-      live "/settings/account", ChatLive, :settings_account
+      live "/profile", ProfileLive, :info
+      live "/profile/password", ProfileLive, :password
+      live "/profile/providers", ProfileLive, :user_providers
+      live "/profile/models", ProfileLive, :user_models
       live "/wiki", WikiLive, :wiki
       live "/wiki/:document_id", WikiLive, :wiki_page_show
-      live "/sources", ChatLive, :sources
-      live "/sources/pipeline", ChatLive, :pipeline
-      live "/sources/:source_id", ChatLive, :source_show
-      live "/sources/:source_id/:document_id", ChatLive, :source_document_show
-      live "/mcp", ChatLive, :mcp_servers
-      live "/reports", ChatLive, :reports
-      live "/reports/:report_id", ChatLive, :report_show
-      live "/agents", ChatLive, :agent_studio
-      live "/agents/list", ChatLive, :agents
-      live "/agents/new", ChatLive, :agent_new
-      live "/agents/:agent_id", ChatLive, :agent_show
-      live "/agents/:agent_id/edit", ChatLive, :agent_edit
-      live "/teams", ChatLive, :teams
-      live "/teams/new", ChatLive, :team_new
-      live "/teams/:team_id", ChatLive, :team_show
-      live "/teams/:team_id/edit", ChatLive, :team_edit
-      live "/runs", ChatLive, :runs
-      live "/runs/new", ChatLive, :run_new
-      live "/runs/:run_id", ChatLive, :run_show
-      live "/runs/:run_id/logs/:log_id", ChatLive, :run_log_show
-      live "/schedules", ChatLive, :schedules
-      live "/schedules/new", ChatLive, :schedule_new
-      live "/schedules/:schedule_id", ChatLive, :schedule_show
+      live "/sources", SourcesLive, :sources
+      live "/sources/pipeline", PipelineLive, :pipeline
+      live "/sources/:source_id", SourcesLive, :source_show
+      live "/sources/:source_id/:document_id", SourcesLive, :source_document_show
+      live "/mcp", McpLive, :mcp_servers
+      live "/reports", ReportsLive, :reports
+      live "/reports/:report_id", ReportsLive, :report_show
+      live "/agents", AgentStudioLive, :agent_studio
+      live "/agents/list", AgentStudioLive, :agents
+      live "/agents/new", AgentStudioLive, :agent_new
+      live "/agents/:agent_id", AgentStudioLive, :agent_show
+      live "/agents/:agent_id/edit", AgentStudioLive, :agent_edit
+      live "/teams", AgentStudioLive, :teams
+      live "/teams/new", AgentStudioLive, :team_new
+      live "/teams/:team_id", AgentStudioLive, :team_show
+      live "/teams/:team_id/edit", AgentStudioLive, :team_edit
+      live "/runs", AgentStudioLive, :runs
+      live "/runs/new", AgentStudioLive, :run_new
+      live "/runs/:run_id", AgentStudioLive, :run_show
+      live "/runs/:run_id/logs/:log_id", AgentStudioLive, :run_log_show
+      live "/schedules", AgentStudioLive, :schedules
+      live "/schedules/new", AgentStudioLive, :schedule_new
+      live "/schedules/:schedule_id", AgentStudioLive, :schedule_show
     end
   end
 
