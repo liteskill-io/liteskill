@@ -1,5 +1,5 @@
 x-app-env: &app-env
-  DATABASE_URL: "ecto://${POSTGRES_USER:-liteskill}:${POSTGRES_PASSWORD:-liteskill}@db/${POSTGRES_DB:-liteskill}"
+  DATABASE_URL: "ecto://${POSTGRES_USER:-liteskill}:${POSTGRES_PASSWORD:-liteskill}@localhost/${POSTGRES_DB:-liteskill}"
   SECRET_KEY_BASE: "${SECRET_KEY_BASE:?SECRET_KEY_BASE is required -- generate with: openssl rand -base64 64}"
   ENCRYPTION_KEY: "${ENCRYPTION_KEY:?ENCRYPTION_KEY is required -- generate with: openssl rand -base64 32}"
 
@@ -27,10 +27,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    ports:
-      - "4000:4000"
+    network_mode: host
     environment:
       <<: *app-env
       PHX_HOST: "${PHX_HOST:-localhost}"

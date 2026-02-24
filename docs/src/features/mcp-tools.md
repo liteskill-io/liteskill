@@ -41,20 +41,13 @@ To allow private URLs (e.g. for self-hosted MCP servers), enable **Allow private
 
 ### Docker Networking
 
-When running Liteskill via Docker Compose, MCP servers on the host machine are not reachable at `localhost` (which refers to the container itself). Use `host.docker.internal` instead:
+The Liteskill app container uses `network_mode: host`, which means it shares the host's network stack directly. MCP servers running on the host machine are reachable at `localhost`:
 
 ```
-http://host.docker.internal:4005
+http://localhost:4005
 ```
 
-This requires two things:
-
-1. **`extra_hosts` in `docker-compose.yml`** (included by default):
-   ```yaml
-   extra_hosts:
-     - "host.docker.internal:host-gateway"
-   ```
-2. **Allow private MCP URLs** enabled in server settings, since `host.docker.internal` resolves to a private address
+This requires **Allow private MCP URLs** enabled in server settings, since `localhost` resolves to a private address.
 
 ## Tool Selection
 
