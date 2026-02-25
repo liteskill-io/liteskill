@@ -48,6 +48,21 @@ The boundary compiler enforces these at compile time.
 | Queue | Concurrency | Purpose |
 |-------|------------|---------|
 | `default` | 10 | General background jobs |
-| `rag_ingest` | 5 | Document ingestion and embedding |
-| `data_sync` | 3 | Data source synchronization |
-| `agent_runs` | 3 | Agent execution |
+| `rag_ingest` | 5 | RAG document ingestion and embedding |
+| `data_sync` | 3 | External data source synchronization |
+| `agent_runs` | 3 | Agent pipeline execution |
+
+## LLM Integration
+
+- All LLM transport via **ReqLLM** (`req_llm ~> 1.5`)
+- `ReqLLM.stream_text/3` for streaming, `ReqLLM.generate_text/3` for single-turn
+- `ReqLLM.embed/3` for embeddings
+- No hardcoded model IDs — all models configured in the database
+
+## Security
+
+- Sensitive fields encrypted at rest via `Liteskill.Crypto` (AES-256-GCM)
+- SSRF protection on MCP server URLs (configurable)
+- ETS-based rate limiting on API routes
+- CSRF protection via Phoenix plugs
+- Per-provider circuit breakers prevent cascading LLM failures

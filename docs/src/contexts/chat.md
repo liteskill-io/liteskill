@@ -8,7 +8,7 @@
 use Boundary,
   top_level?: true,
   deps: [Liteskill.Aggregate, Liteskill.Authorization, Liteskill.EventStore, Liteskill.Rbac, Liteskill.LlmModels],
-  exports: [Conversation, ConversationAggregate, Events, Message, MessageBuilder, MessageChunk, Projector, StreamRecovery, ToolCall]
+  exports: [Conversation, ConversationAggregate, Events, Message, MessageBuilder, MessageChunk, Projector, StreamRecovery, StreamRegistry, ToolCall]
 ```
 
 ## Write API
@@ -49,6 +49,8 @@ Delegates to `Liteskill.Authorization`:
 
 ## Streaming
 
-- `broadcast_tool_decision/3` — Sends approve/reject decision for pending tool calls
-- `recover_stream/2` — Manually recovers a stuck streaming conversation
-- `list_stuck_streaming/1` — Finds conversations stuck in streaming state
+Streaming is initiated after a user message is sent. The `StreamHandler` (in `Liteskill.LLM`) manages the LLM streaming lifecycle, emitting events back to the conversation's event stream. The `Projector` updates projection tables as events arrive, and LiveView receives real-time updates via PubSub.
+
+## Message Builder
+
+`Liteskill.Chat.MessageBuilder` constructs the message history for LLM requests from the conversation's projected messages, including tool call results and RAG context.

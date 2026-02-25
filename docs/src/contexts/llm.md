@@ -27,7 +27,7 @@ Streaming is handled by `LLM.StreamHandler`, which orchestrates:
 
 1. Starting a streaming request via ReqLLM
 2. Appending events to the conversation's event stream
-3. Retrying on 429/503 errors
+3. Retrying on 429/503/408 errors and transport failures (up to 3 retries with exponential backoff)
 4. Executing tool calls (auto-confirm or pause for approval)
 5. Recording usage after each round
 
@@ -48,4 +48,21 @@ The gateway provides per-provider infrastructure:
 
 ## Usage Recording
 
-All completions (streaming and non-streaming) record usage via `Liteskill.Usage.record_from_response/2`, tracking tokens, costs, latency, and tool rounds.
+After each streaming round, usage is recorded via `Liteskill.Usage.record_from_response/2`. This captures input tokens, output tokens, reasoning tokens, cached tokens, costs, and latency.
+
+## RagContext
+
+`Liteskill.LLM.RagContext` builds RAG context for prompts:
+
+- Searches accessible RAG collections for relevant documents
+- Injects top-k chunks as system context
+- Tracks RAG sources for citation and traceability
+
+## ToolUtils
+
+`Liteskill.LLM.ToolUtils` provides shared utilities:
+
+- Convert tool specs to ReqLLM format
+- Dispatch tool execution to MCP servers
+- Format tool outputs for LLM consumption
+- Normalize tool call formats across providers

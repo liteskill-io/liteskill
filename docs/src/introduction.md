@@ -28,4 +28,4 @@ Liteskill is an event-sourced chat application built with Phoenix 1.8 and Elixir
 | Auth | Ueberauth (OIDC) + Argon2 (password) |
 | Encryption | AES-256-GCM via `Liteskill.Crypto` |
 
-Current version: **0.2.29**
+Current version: **0.2.37**

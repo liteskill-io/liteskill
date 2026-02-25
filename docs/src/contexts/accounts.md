@@ -39,6 +39,10 @@ Liteskill supports dual authentication:
 
 On boot, `ensure_admin_user/0` creates `admin@liteskill.local` if missing and forces its role to `"admin"`.
 
+## Single-User Mode
+
+When `SINGLE_USER_MODE=true`, `SingleUser.auto_provision_admin/0` runs on boot to ensure the admin user is ready without manual setup.
+
 ## Invitations
 
 - `create_invitation(email, admin_user_id)` — Creates an invite token

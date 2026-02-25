@@ -8,6 +8,7 @@
 | `mix phx.server` | Start dev server on localhost:4000 |
 | `mix ecto.reset` | Drop + create + migrate + seed |
 | `iex -S mix phx.server` | Start with interactive shell |
+| `mise run singleuser` | Start in single-user mode |
 
 ## Testing
 
@@ -53,27 +54,12 @@ Always run `mix precommit` after completing changes.
 |---------|-------------|
 | `./scripts/test-with-docker.sh test` | Run tests via Docker Postgres |
 | `./scripts/test-with-docker.sh precommit` | Full precommit via Docker |
+| `docker compose up` | Start full stack (DB + app) |
+| `docker compose run --rm migrate` | Run migrations only |
 
 ## Desktop
 
 | Command | Description |
 |---------|-------------|
-| `mix desktop.setup` | Install Tauri dependencies |
-| `mix desktop.dev` | Open Tauri dev window |
-| `mix desktop.build` | Build desktop release |
-
-## Assets
-
-| Command | Description |
-|---------|-------------|
-| `mix assets.setup` | Install Tailwind and esbuild |
-| `mix assets.build` | Compile + build CSS/JS |
-| `mix assets.deploy` | Minified build + digest for production |
-
-## Mise Tasks
-
-| Task | Description |
-|------|-------------|
-| `mise run singleuser` | Start in single-user mode |
-| `mise run local-tauri` | Open Tauri dev window (no sidecar) |
 | `mise run linux-appimage` | Build Linux AppImage via Docker |
+| `mise run local-tauri` | Open Tauri dev window against localhost:4000 |

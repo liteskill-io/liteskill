@@ -19,7 +19,8 @@ Liteskill integrates with [Model Context Protocol (MCP)](https://modelcontextpro
 
 The client supports:
 
-- Automatic retry with exponential backoff on 429/5xx errors
+- Automatic retry with exponential backoff on 429/5xx errors (up to 2 retries)
+- Session ID tracking via `mcp-session-id` header
 - Custom headers per server
 - API key authentication (sent as `Authorization: Bearer <key>`)
 - SSE response parsing
@@ -30,7 +31,19 @@ The client supports:
 - Global servers (set by admin) are available to all users
 - Servers can be shared via ACLs
 
-### SSRF Protection
+## Tool Selections
+
+Users select which MCP servers are active for their conversations:
+
+- Selections are persisted per user via `UserToolSelection`
+- Selected servers' tools are included in LLM requests
+- Stale selections (for deleted servers) are automatically pruned
+
+## Built-in Servers
+
+Virtual servers prefixed with `builtin:` are defined in code (`Liteskill.BuiltinTools`) and merged into the server list. They cannot be modified or deleted. These provide tools for built-in features like reports and wiki.
+
+## SSRF Protection
 
 Server URLs are validated to prevent Server-Side Request Forgery (SSRF). By default:
 
@@ -39,7 +52,7 @@ Server URLs are validated to prevent Server-Side Request Forgery (SSRF). By defa
 
 To allow private URLs (e.g. for self-hosted MCP servers), enable **Allow private MCP URLs** in server settings.
 
-### Docker Networking
+## Docker Networking
 
 The Liteskill app container uses `network_mode: host`, which means it shares the host's network stack directly. MCP servers running on the host machine are reachable at `localhost`:
 
@@ -48,11 +61,3 @@ http://localhost:4005
 ```
 
 This requires **Allow private MCP URLs** enabled in server settings, since `localhost` resolves to a private address.
-
-## Tool Selection
-
-Users select which MCP servers are active for their conversations. Selections are persisted in `user_tool_selections` and restored on login. Stale selections (referencing inaccessible servers) are automatically pruned.
-
-## Built-in Tools
-
-Liteskill provides built-in virtual MCP servers (prefixed with `builtin:`) for internal capabilities like report editing.

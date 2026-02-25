@@ -32,9 +32,28 @@
 | `/invite/:token` | Invitation acceptance |
 | `/setup` | First-time admin setup |
 
+## Admin LiveView Routes
+
+Require admin role via `require_admin` mount hook.
+
+| Route | Description |
+|-------|-------------|
+| `/admin` | Admin dashboard (defaults to usage) |
+| `/admin/usage` | Usage analytics |
+| `/admin/servers` | MCP server registry |
+| `/admin/users` | User management |
+| `/admin/groups` | Group management |
+| `/admin/providers` | LLM provider configuration |
+| `/admin/models` | LLM model configuration |
+| `/admin/roles` | Role management |
+| `/admin/rag` | RAG configuration |
+| `/admin/setup` | Application setup |
+| `/settings/*` | Settings pages (single-user mode unified settings) |
+
 ## Authenticated LiveView Routes
 
 ### Chat
+
 | Route | Description |
 |-------|-------------|
 | `/` | Main chat interface |
@@ -42,6 +61,7 @@
 | `/c/:conversation_id` | Single conversation |
 
 ### Profile
+
 | Route | Description |
 |-------|-------------|
 | `/profile` | User info |
@@ -49,51 +69,52 @@
 | `/profile/providers` | User LLM providers |
 | `/profile/models` | User LLM models |
 
-### Settings (Single-User Mode)
-| Route | Description |
-|-------|-------------|
-| `/settings` | Settings overview |
-| `/settings/general` | General settings |
-| `/settings/providers` | Provider management |
-| `/settings/models` | Model management |
-| `/settings/rag` | RAG settings |
-| `/settings/account` | Account settings |
-
-### Features
-| Route | Description |
-|-------|-------------|
-| `/wiki`, `/wiki/:document_id` | Wiki |
-| `/sources`, `/sources/:source_id` | Data sources |
-| `/mcp` | MCP servers |
-| `/reports`, `/reports/:report_id` | Reports |
-| `/agents`, `/agents/:agent_id` | Agent studio |
-| `/teams`, `/teams/:team_id` | Teams |
-| `/runs`, `/runs/:run_id` | Runs |
-| `/schedules`, `/schedules/:schedule_id` | Schedules |
-
-## Admin Routes (`/admin`)
-
-Requires admin role via `LiveAuth :require_admin`.
+### Wiki
 
 | Route | Description |
 |-------|-------------|
-| `/admin/usage` | Usage dashboard |
-| `/admin/servers` | MCP server management |
-| `/admin/users` | User management |
-| `/admin/groups` | Group management |
-| `/admin/providers` | LLM provider management |
-| `/admin/models` | LLM model management |
-| `/admin/roles` | RBAC role management |
-| `/admin/rag` | RAG admin settings |
-| `/admin/setup` | Admin setup |
+| `/wiki` | Wiki home |
+| `/wiki/:document_id` | View/edit a wiki page |
+| `/wiki/:space_id/export` | Export a wiki space (browser download) |
 
-## REST API (`/api`)
+### Sources & RAG
 
-Requires authentication. See the [API](api.md) page for details.
+| Route | Description |
+|-------|-------------|
+| `/sources` | Source/collection list |
+| `/sources/pipeline` | RAG ingestion pipeline |
+| `/sources/:source_id` | Source details |
+| `/sources/:source_id/:document_id` | Document details |
 
-## Dev Routes
+### MCP Servers
 
-Available only in development:
+| Route | Description |
+|-------|-------------|
+| `/mcp` | MCP server management |
 
-- `/dev/dashboard` — Phoenix LiveDashboard
-- `/dev/mailbox` — Swoosh email preview
+### Reports
+
+| Route | Description |
+|-------|-------------|
+| `/reports` | Report list |
+| `/reports/:report_id` | View/edit a report |
+
+### Agent Studio
+
+| Route | Description |
+|-------|-------------|
+| `/agents` | Agent Studio landing |
+| `/agents/list` | Agent list |
+| `/agents/new` | Create agent |
+| `/agents/:agent_id` | View agent |
+| `/agents/:agent_id/edit` | Edit agent |
+| `/teams` | Team list |
+| `/teams/new` | Create team |
+| `/teams/:team_id` | View/edit team |
+| `/runs` | Run list |
+| `/runs/new` | Start a run |
+| `/runs/:run_id` | View run details |
+| `/runs/:run_id/logs/:log_id` | View run log |
+| `/schedules` | Schedule list |
+| `/schedules/new` | Create schedule |
+| `/schedules/:schedule_id` | View/edit schedule |

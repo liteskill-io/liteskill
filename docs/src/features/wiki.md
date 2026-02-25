@@ -38,8 +38,13 @@ Wiki content is automatically indexed for RAG:
 - Wiki collections are shared with users who have access to the wiki space
 - This means RAG search results include relevant wiki content from shared spaces
 
-## Export
+## Export & Import
 
-Wiki spaces can be exported via the `/wiki/:space_id/export` route.
+- Wiki spaces can be exported via the `/wiki/:space_id/export` route
+- Reports can be exported to wiki pages via `DataSources.export_report_to_wiki/3`
+- Wiki content can be imported from external sources
 
-Reports can also be exported to wiki pages via `DataSources.export_report_to_wiki/3`.
+## Routes
+
+- `/wiki` — Wiki home (list all accessible spaces)
+- `/wiki/:document_id` — View/edit a wiki page

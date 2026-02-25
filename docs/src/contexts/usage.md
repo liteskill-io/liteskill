@@ -43,10 +43,16 @@ Each record tracks: `input_tokens`, `output_tokens`, `total_tokens`, `reasoning_
 - `check_cost_limit(:conversation, id, limit)` — Checks if conversation cost exceeds limit
 - `check_cost_limit(:run, id, limit)` — Checks if run cost exceeds limit
 
+## Cost Calculator
+
+`Liteskill.Usage.CostCalculator` computes costs from token counts and model pricing:
+
+- Resolves per-model input/output rates from the `LlmModel` record
+- Calculates separate costs for input, output, and reasoning tokens
+- Handles cached token pricing
+
 ## Embedding Usage
 
 Separate tracking for embedding API calls:
 
 - `embedding_totals(opts)` — Aggregate embedding usage
-- `embedding_by_model(opts)` — Grouped by model
-- `embedding_by_user(opts)` — Grouped by user

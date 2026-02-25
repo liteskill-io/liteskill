@@ -6,19 +6,19 @@ Liteskill is an event-sourced Phoenix application organized around bounded conte
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    LiteSkillWeb                         │
-│  LiveView UI │ REST API │ Auth Plugs │ Rate Limiting    │
-└──────────┬──────────────┬───────────────────────────────┘
+│                    LiteskillWeb                          │
+│  LiveView UI │ REST API │ Auth Plugs │ Rate Limiting     │
+└──────────┬──────────────┬────────────────────────────────┘
            │              │
-┌──────────▼──────────────▼───────────────────────────────┐
-│                   Context Layer                          │
-│  Chat │ Accounts │ Authorization │ Groups │ LLM │ ...   │
-└──────────┬──────────────────────────────────────────────┘
+┌──────────▼──────────────▼────────────────────────────────┐
+│                   Context Layer                           │
+│  Chat │ Accounts │ Authorization │ Groups │ LLM │ ...    │
+└──────────┬───────────────────────────────────────────────┘
            │
-┌──────────▼──────────────────────────────────────────────┐
-│              Infrastructure Layer                        │
-│  EventStore │ Aggregate │ Crypto │ Repo │ PubSub        │
-└─────────────────────────────────────────────────────────┘
+┌──────────▼───────────────────────────────────────────────┐
+│              Infrastructure Layer                         │
+│  EventStore │ Aggregate │ Crypto │ Repo │ PubSub         │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ## Bounded Contexts
@@ -34,6 +34,7 @@ Each context is a top-level `Boundary` module that declares its dependencies and
 | `Liteskill.LLM` | LLM completions, stream orchestration |
 | `Liteskill.LlmProviders` | Provider CRUD, env bootstrapping |
 | `Liteskill.LlmModels` | Model CRUD, provider options |
+| `Liteskill.LlmGateway` | Per-provider circuit breaker, concurrency gates, token buckets |
 | `Liteskill.McpServers` | MCP server CRUD, tool selection |
 | `Liteskill.Rag` | Collections, sources, documents, embeddings, search |
 | `Liteskill.Agents` | Agent definitions, tool/source ACLs |
@@ -45,11 +46,13 @@ Each context is a top-level `Boundary` module that declares its dependencies and
 | `Liteskill.Usage` | Token/cost tracking and aggregation |
 | `Liteskill.Crypto` | AES-256-GCM encryption at rest |
 | `Liteskill.Rbac` | Role-based permission checks |
+| `Liteskill.Settings` | Application-wide settings |
 
 ## Key Design Decisions
 
-- **Event sourcing for chat**: Conversations are append-only event streams, enabling forking, replay, and audit trails.
-- **Projection tables**: Read-side tables (`conversations`, `messages`, `message_chunks`, `tool_calls`) are populated by a `Projector` GenServer for efficient querying.
-- **ACL-based authorization**: A single `entity_acls` table handles access control for all entity types (conversations, reports, wiki spaces, MCP servers, agents, etc.).
-- **Binary UUIDs**: All primary keys are binary UUIDs.
-- **Req only**: All HTTP is done via the Req library — no httpoison, tesla, or httpc.
+- **Event sourcing for chat** — Conversations are modeled as event streams for full auditability and state replay. All other domains use standard CRUD with Ecto.
+- **CQRS** — Write operations go through the event sourcing pipeline; reads query projection tables directly.
+- **Boundary enforcement** — The `boundary` library enforces context dependencies at compile time, preventing unauthorized cross-context calls.
+- **ReqLLM for all LLM transport** — No direct HTTP calls to LLM providers. ReqLLM abstracts provider differences.
+- **Unified ACL table** — A single `entity_acls` table handles access control for all entity types (conversations, reports, wiki spaces, agents, etc.).
+- **Oban for background jobs** — Embedding, data source sync, and agent runs are processed as Oban jobs with configurable queues and concurrency.

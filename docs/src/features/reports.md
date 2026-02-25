@@ -47,4 +47,9 @@ Reports use the standard ACL system:
 
 ## Run Integration
 
-Reports can be created as part of an agent run, linking the report to its source run for traceability.
+Reports can be created as part of an agent run, linking the report to its source run for traceability. The `ReportBuilder` in the runs system generates structured report output from pipeline execution.
+
+## Routes
+
+- `/reports` — List all reports
+- `/reports/:report_id` — View/edit a report

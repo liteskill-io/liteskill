@@ -48,4 +48,4 @@ Features:
 - Automatic retry with exponential backoff (up to 2 retries)
 - Session ID tracking via `mcp-session-id` header
 - Custom header support with blocked header filtering for security
-- SSE response body parsing
+- API key authentication via `Authorization: Bearer <key>` header

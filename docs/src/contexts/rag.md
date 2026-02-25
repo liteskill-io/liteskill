@@ -13,7 +13,7 @@ use Boundary,
 
 ## Data Model
 
-- **Collection** — Top-level grouping, per user
+- **Collection** — Top-level grouping, per user, with configurable embedding dimension (256–1536, default 1024)
 - **Source** — A source within a collection (e.g. "wiki", "manual")
 - **Document** — Content with title, status, metadata, and content hash
 - **Chunk** — Text chunk with position, token count, and pgvector embedding
@@ -48,4 +48,18 @@ Standard CRUD with user ownership checks. Collections and sources are scoped to 
 
 ## URL Ingestion
 
-`ingest_url(collection_id, url, user_id, opts)` enqueues an `IngestWorker` Oban job that fetches, chunks, and embeds content from a URL.
+The `IngestWorker` (Oban job) handles URL-based ingestion:
+1. Fetches URL content via Req
+2. Validates text content (rejects binary types)
+3. Auto-creates source from domain name
+4. Chunks content and enqueues for embedding
+5. Retries up to 3 times on transient failures
+
+## Background Workers
+
+| Worker | Queue | Purpose |
+|--------|-------|---------|
+| `IngestWorker` | `rag_ingest` | URL-based document ingestion |
+| `WikiSyncWorker` | `rag_ingest` | Sync wiki pages to RAG |
+| `DocumentSyncWorker` | `rag_ingest` | Sync data source documents to RAG |
+| `ReembedWorker` | `rag_ingest` | Re-embed all documents after model change |

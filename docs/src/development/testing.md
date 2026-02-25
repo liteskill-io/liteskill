@@ -51,41 +51,60 @@ Req.Test.stub(Liteskill.McpServers.Client, fn conn ->
 end)
 ```
 
-**Note**: `Req.Test` does NOT trigger `into:` callbacks. Streaming tests require different approaches.
+**Important**: Req.Test does NOT trigger `into:` callbacks. Use the `plug:` option when constructing Req requests in production code to enable test substitution.
 
-## Projector in Tests
+## Projector
 
-The `Chat.Projector` runs in the main supervision tree. **Never** use `start_supervised!` for it in tests.
+The `Chat.Projector` runs in the **main supervision tree** — never `start_supervised!` it in tests. It's already running.
 
 ## Process Synchronization
 
-Chat context write functions include `Process.sleep(50)` for projector processing. In tests, prefer:
+Chat context write functions include `Process.sleep(50)` for projection consistency. In tests, prefer synchronization over additional sleeps:
 
 ```elixir
-_ = :sys.get_state(pid)
-```
+# Prefer this
+_ = :sys.get_state(Liteskill.Chat.Projector)
 
-This is more reliable than additional sleeps.
+# Or use Projector.sync/0
+:ok = Liteskill.Chat.Projector.sync()
+```
 
 ## Stateful Stubs
 
-For tests that need varying responses across retries, use an `Agent`:
+Use `Agent` for varying responses across retries:
 
 ```elixir
-{:ok, stub} = Agent.start_link(fn -> [:error, :ok] end)
+{:ok, counter} = Agent.start_link(fn -> 0 end)
 
 Req.Test.stub(ModuleName, fn conn ->
-  [response | rest] = Agent.get_and_update(stub, fn state ->
-    {state, tl(state) ++ [hd(state)]}
-  end)
-  # use response...
+  call = Agent.get_and_update(counter, &{&1, &1 + 1})
+  case call do
+    0 -> Plug.Conn.send_resp(conn, 429, "rate limited")
+    _ -> Req.Test.json(conn, %{"result" => "ok"})
+  end
 end)
 ```
 
-Set `backoff_ms: 1` for retry tests to avoid slow tests.
+Set `backoff_ms: 1` for retry tests to avoid slow test runs.
 
 ## MCP Client Testing
 
 ```elixir
-plug: {Req.Test, Liteskill.McpServers.Client}
+Req.Test.stub(Liteskill.McpServers.Client, fn conn ->
+  Req.Test.json(conn, %{
+    "jsonrpc" => "2.0",
+    "id" => 1,
+    "result" => %{"tools" => []}
+  })
+end)
+```
+
+## Docker-Based Testing
+
+```bash
+# Run tests with a temporary Docker Postgres
+./scripts/test-with-docker.sh test
+
+# Full precommit with Docker Postgres
+./scripts/test-with-docker.sh precommit
 ```

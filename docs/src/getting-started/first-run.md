@@ -8,6 +8,8 @@ On first boot, Liteskill:
 2. Creates ETS tables for rate limiting and LLM token buckets
 3. Ensures a root admin user exists (`admin@liteskill.local`)
 4. Bootstraps system RBAC roles
+5. Ensures environment-configured providers are created (e.g. AWS Bedrock via `AWS_BEARER_TOKEN_BEDROCK`)
+6. Loads application settings
 
 ## Admin Setup
 
@@ -32,3 +34,11 @@ To enable tool calling:
 1. Go to **MCP Servers** (`/mcp`)
 2. Add an MCP server URL with optional API key and custom headers
 3. The server's tools will be available in conversations when selected
+
+## Configuring RAG
+
+To enable document-augmented conversations:
+
+1. Go to **Admin > RAG** (`/admin/rag`) and configure the default embedding model
+2. Navigate to **Sources** (`/sources`) to create collections and add documents
+3. Documents are automatically chunked and embedded for semantic search

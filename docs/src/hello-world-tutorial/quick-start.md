@@ -4,55 +4,38 @@ Welcome! This tutorial gets you up and going with LiteSkill.
 
 ## Docker Compose
 
-The fastest way to get up and running is with Docker Compose. Ensure it's installed on your system and then run the following script:
+The fastest way to get up and running is with Docker Compose. Ensure it's installed on your system and then run the following:
 
 ```bash
-git clone https://github.com/your-org/liteskill-oss.git && cd liteskill-oss
+git clone https://github.com/liteskill-ai/liteskill-oss.git && cd liteskill-oss
+```
+
+Before starting the app, generate the required secrets:
+
+```bash
+export SECRET_KEY_BASE=$(openssl rand -base64 64)
+export ENCRYPTION_KEY=$(openssl rand -base64 32)
+```
+
+Then start everything:
+
+```bash
 docker compose up
 ```
 
+This starts a PostgreSQL 16 database with pgvector and the Liteskill application. The app container uses host networking so it can reach the database on `localhost`.
+
 ## Admin Setup
 
-Open a new browser window on the other half of yours and navigate to [http://localhost:4000/](http://localhost:4000/). 
+Open a browser and navigate to [http://localhost:4000/](http://localhost:4000/) and follow the setup instructions.
 
-1. Set the admin password.
-1. Skip connecting your data sources for now.
-1. Login using ```admin``` in place of an email address and the password you just set.
+For testing purposes, we recommend using [OpenRouter](https://openrouter.ai/) as your model provider.
+For model selection, we recommend [Claude Sonnet](https://openrouter.ai/anthropic/claude-sonnet-4.5) for inference and [OpenAI: Text Embedding 3 Small](openai/text-embedding-3-small) for embeddings.
 
-## Configuring an LLM Provider
+## Your First Conversation
 
-Before you can chat, you'll need to configure at least one LLM provider. For testing purposes, we'll use [OpenRouter](https://openrouter.ai/).
+1. Navigate back to the main page by clicking `Chat` in the sidebar.
+1. Click the "+" icon to the right of "Conversations" in the top left corner of the screen.
+1. Type a message and hit Enter!
 
-### Get your OpenRouter Information
-1. Open a blank text file, we'll be saving some data in here.
-1. In a new browser tab, go to [OpenRouter's website](https://openrouter.ai/).
-1. Sign Up or log in.
-1. Click "Get API Key".
-    - Create a key and save it into your file.
-1. Then search for "Haiku" and use the first model that pops up. We're going to copy more info into our text file
-    - the model id.
-    - the model input token cost per million(M).
-    - the model output token cost per million(M).
-
-### Add the OpenRouter Provider
-1. In the LiteSkill app, navigate to ```Admin > Providers``` and click the purple "Add Provider" icon in the top right.
-1. Configure the Provider:
-    - Name: "OpenRouter Provider"
-    - Click on the Provider Type drop down and select: "openrouter"
-    - API key: Paste in the API key you saved in the text file
-    - You don't need to put anything in the Provider Config section
-    - Set the flag for Instance-wide (it's just you for now!)
-    - Click Save
-
-### Add a Model
-1. Now click on the ```Models``` tab, next to the ```Providers``` tab in the navbar.
-1. Configure the Model:
-    - Display Name: "Haiku"
-    - Provider: "OpenRouter Provider" (should be set automatically)
-    - Paste in the model ID you saved in the text file.
-    - Model Type: "inference" (should be set automatically)
-    - Input Cost and Output Cost you saved in the text file
-    - Leave the model configuration blank for now.
-    - Click Save
-
-Chat should now work!! Click the "+" icon next to "Conversations" in the top left and type "Hello world!"
+You should see the LLM stream its response in real-time. Congratulations — you've got Liteskill running!

@@ -4,7 +4,7 @@
 
 1. Install [mise](https://mise.jdx.dev/)
 2. Clone the repository
-3. Run `mise install` to get Elixir 1.18, Erlang/OTP 28, and Node.js 24
+3. Run `mise install` to get Elixir 1.18, Erlang/OTP 28, Node.js 24, and mdbook
 
 ## Setup
 
@@ -47,20 +47,38 @@ If you don't have PostgreSQL installed locally:
 # Run tests with Docker Postgres
 ./scripts/test-with-docker.sh test
 
-# Full precommit
+# Full precommit with Docker Postgres
 ./scripts/test-with-docker.sh precommit
 ```
 
-## Docker Compose (Production-like)
+The script starts a temporary `pgvector/pgvector:pg16` container, sets `DATABASE_URL`, runs the specified command, and cleans up after.
+
+## Building the Docker Image
 
 ```bash
-# Generate secrets
+docker build -t liteskill .
+```
+
+The multi-stage Dockerfile:
+
+1. **Stage 0** — Copies Node.js binaries from `node:24-bookworm-slim`
+2. **Stage 1 (Builder)** — Compiles the Elixir release with `mix release liteskill`
+3. **Stage 2 (Runtime)** — Minimal Debian image with the release binary
+
+## Running with Docker Compose
+
+```bash
 export SECRET_KEY_BASE=$(openssl rand -base64 64)
 export ENCRYPTION_KEY=$(openssl rand -base64 32)
+docker compose up
+```
 
-# Start
-docker compose up -d
+This starts:
+- **db** — PostgreSQL 16 with pgvector
+- **app** — Liteskill release with host networking
 
-# Run migrations
-docker compose run --rm -e PROFILE=tools migrate
+To run migrations separately:
+
+```bash
+docker compose run --rm migrate
 ```

@@ -34,3 +34,15 @@ Use the included test script which starts a disposable Postgres container:
 ```
 
 Or use the production `docker-compose.yml` which provides a `pgvector/pgvector:pg16` service.
+
+## Quick Start (Docker Compose)
+
+If you just want to run Liteskill without setting up a development environment:
+
+```bash
+export SECRET_KEY_BASE=$(openssl rand -base64 64)
+export ENCRYPTION_KEY=$(openssl rand -base64 32)
+docker compose up
+```
+
+This starts PostgreSQL with pgvector and the Liteskill application on port 4000.

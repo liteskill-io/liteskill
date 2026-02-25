@@ -1,6 +1,6 @@
 # LiveView
 
-Liteskill's UI is built entirely with Phoenix LiveView. The main interface is a single `ChatLive` module that renders different views based on the route's live action.
+Liteskill's UI is built entirely with Phoenix LiveView. The interface is composed of several LiveView modules, each handling a different feature area.
 
 ## Live Sessions
 
@@ -13,24 +13,72 @@ The router defines several live sessions with different auth requirements:
 | `:admin` | `require_admin` | Admin-only routes |
 | `:chat` | `require_authenticated` | All authenticated user routes |
 
-## ChatLive
+## LiveView Modules
 
-`ChatLive` is the primary LiveView module. It uses the live action to determine which view to render:
+### ChatLive
 
-- `:index` / `:conversations` / `:show` — Chat interface
-- `:admin_*` — Admin panels
-- `:settings_*` — Single-user mode settings
-- `:mcp_servers` — MCP server management
-- `:reports` / `:report_show` — Reports
-- `:agent_studio` / `:agents` / `:agent_show` — Agent studio
-- `:teams` / `:team_show` — Teams
-- `:runs` / `:run_show` — Runs
-- `:schedules` / `:schedule_show` — Schedules
-- `:sources` / `:source_show` — Data sources
+The primary chat interface. Handles:
 
-## WikiLive
+- Message list with real-time streaming updates
+- Tool call approval UI
+- RAG source display
+- Conversation forking and editing
+- Model selection
 
-A separate `WikiLive` module handles the wiki interface at `/wiki`.
+### AdminLive
+
+Multi-tab admin dashboard with separate tab modules:
+
+- `UsageTab` — Usage analytics and reporting
+- `ServerTab` — MCP server registry
+- `UsersTab` — User management and invitations
+- `GroupsTab` — Group management
+- `ProvidersTab` — LLM provider configuration
+- `ModelsTab` — LLM model configuration
+- `RolesTab` — RBAC role management
+- `RagTab` — RAG settings and collection management
+- `SetupTab` — Application settings
+
+### AgentStudioLive
+
+Agent, team, run, and schedule management with live actions:
+
+- Agent CRUD (list, new, show, edit)
+- Team composition
+- Run execution with real-time log streaming
+- Schedule management
+
+### ProfileLive
+
+User account settings: profile info, password change, personal providers and models.
+
+### ReportsLive
+
+Report viewing and editing with section management and comment threads.
+
+### SourcesLive
+
+RAG collection browser with document and chunk management.
+
+### PipelineLive
+
+RAG ingestion pipeline UI for URL-based document ingestion.
+
+### WikiLive
+
+Wiki editor and browser for creating and editing wiki spaces and pages.
+
+### McpLive
+
+MCP server management: CRUD, tool listing, and per-user tool selection.
+
+### AuthLive
+
+Login, registration, and invitation acceptance forms.
+
+### SetupLive
+
+First-time admin setup wizard.
 
 ## Auth Hooks
 
@@ -48,3 +96,4 @@ LiveView receives real-time updates via PubSub:
 - **Streaming chunks** — LLM response chunks update the UI in real-time
 - **Tool call status** — Tool call progress and results
 - **Run updates** — Agent run status and log entries
+- **Conversation list** — New messages update conversation metadata

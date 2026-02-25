@@ -48,15 +48,20 @@ use Boundary,
 ## Sync Pipeline
 
 - `start_sync(source_id, user_id)` — Enqueues a `SyncWorker` Oban job
-- `upsert_document_by_external_id/4` — Idempotent upsert using content hashing
-- `delete_document_by_external_id/3` — Delete by external ID
-- `update_sync_status/3` and `update_sync_cursor/3` — Track sync progress
+- `SyncWorker` uses the `ConnectorRegistry` to dispatch to the correct connector (Google Drive, SharePoint, etc.)
+- Each connector fetches updated documents, creates/updates local records, and triggers RAG re-embedding
 
 ## Wiki Integration
 
-Wiki documents (`source_ref: "builtin:wiki"`) have special handling:
+- `Connectors.Wiki` handles built-in wiki documents
+- `WikiExport` exports wiki spaces as structured documents
+- `WikiImport` imports wiki content from external sources
+- `export_report_to_wiki/3` converts a report to wiki pages
 
-- Creating/updating wiki pages triggers RAG sync via `WikiSyncWorker`
-- Wiki ACLs are based on the root space document
-- Documents support hierarchical tree structures
-- `export_report_to_wiki/3` converts a report to a wiki page
+## Content Extraction
+
+`ContentExtractor` handles converting various document formats to plain text for embedding.
+
+## Built-in Sources
+
+`Liteskill.BuiltinSources` defines virtual sources that exist in code (e.g. the Wiki source). These appear in the source list but cannot be modified or deleted.

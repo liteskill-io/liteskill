@@ -47,12 +47,4 @@ use Boundary, top_level?: true, deps: [Liteskill.Groups], exports: [EntityAcl, R
 
 ## Entity Types
 
-The ACL system is used across: `conversation`, `report`, `wiki_space`, `mcp_server`, `agent_definition`, `source`, `schedule`, `run`, `llm_provider`.
-
-## Agent ACLs
-
-Agents have their own ACL entries for scoped tool and data source access:
-
-- `grant_agent_access(entity_type, entity_id, agent_definition_id, role)`
-- `revoke_agent_access(entity_type, entity_id, agent_definition_id)`
-- `agent_accessible_entity_ids(entity_type, agent_definition_id)`
+The ACL system is used across: `conversation`, `report`, `wiki_space`, `mcp_server`, `agent_definition`, `team_definition`, `run`, `schedule`, `source`, `llm_provider`, `llm_model`.

@@ -45,3 +45,17 @@ Agents can also be granted access to data sources for RAG:
 ## Model Validation
 
 When creating or updating an agent with an `llm_model_id`, the context validates that the user has access to that model via `LlmModels.get_model/2`.
+
+## Tool Resolution
+
+`Liteskill.Agents.ToolResolver` resolves the set of tools available to an agent at execution time by querying its MCP server ACLs and fetching tool lists from each accessible server.
+
+## Execution
+
+Agent execution is handled by `Liteskill.Agents.Actions.LlmGenerate`, which provides a synchronous agentic loop:
+
+1. Build messages from context
+2. Send to LLM with available tools
+3. If LLM requests tool calls, execute them and loop
+4. Apply context pruning if needed
+5. Enforce cost limits per run

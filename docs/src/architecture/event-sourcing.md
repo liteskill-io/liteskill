@@ -12,7 +12,7 @@ Command → Aggregate → Event → EventStore (append) → PubSub broadcast →
 2. `Aggregate.Loader.execute/3` loads the aggregate state by replaying events (or from snapshot), executes the command, and appends resulting events
 3. `EventStore.Postgres.append_events/3` inserts events in a transaction with optimistic concurrency (unique index on `stream_id, stream_version`)
 4. After successful append, events are broadcast via `Phoenix.PubSub` on topic `"event_store:<stream_id>"`
-5. `Chat.Projector` (a GenServer in the supervision tree) subscribes to PubSub and updates projection tables
+5. `Chat.Projector` (a GenServer in the supervision tree) receives events and updates projection tables
 
 ## EventStore
 
@@ -40,9 +40,28 @@ Commands:
 - `:update_title` — Updates the title
 - `:truncate_conversation` — Truncates at a message boundary
 
+## Events
+
+The system defines 12 domain event types:
+
+| Event | Description |
+|-------|-------------|
+| `ConversationCreated` | Initial conversation setup |
+| `UserMessageAdded` | User sends a message |
+| `AssistantStreamStarted` | LLM response begins |
+| `AssistantChunkReceived` | Text delta received during streaming |
+| `AssistantStreamCompleted` | Stream finished successfully |
+| `AssistantStreamFailed` | Stream error occurred |
+| `ToolCallStarted` | LLM requests a tool call |
+| `ToolCallCompleted` | Tool execution finished |
+| `ConversationForked` | Branch from parent conversation |
+| `ConversationTitleUpdated` | Title changed |
+| `ConversationArchived` | Conversation closed |
+| `ConversationTruncated` | Messages truncated at a boundary |
+
 ## Event Serialization
 
-Events are stored with **string keys** (via `stringify_keys`). Deserialization back to structs happens through `Events.deserialize/1`.
+Events are stored with **string keys** (via `stringify_keys`). Deserialization back to structs happens through `Events.deserialize/1`. The event type string (e.g. `"ConversationCreated"`) is mapped to its module via `Events.module_for/1`.
 
 ## Stream IDs
 
@@ -50,8 +69,12 @@ Stream IDs follow the format `"conversation-<uuid>"`.
 
 ## Projector
 
-`Liteskill.Chat.Projector` is a GenServer that runs in the main supervision tree. It:
+`Liteskill.Chat.Projector` is a GenServer in the main supervision tree that projects events into read-model tables:
 
-- Subscribes to all event store PubSub topics
-- Updates the `conversations`, `messages`, `message_chunks`, and `tool_calls` projection tables
-- Also supports synchronous `project_events/2` for immediate consistency after writes
+- **Synchronous** — `project_events/2` blocks until projection is complete (used for write operations that need immediate read consistency)
+- **Asynchronous** — `project_events_async/2` casts without waiting (used for streaming chunks where eventual consistency is acceptable)
+- **Rebuild** — `rebuild_projections/0` replays all events from scratch to reconstruct projection tables
+
+## Snapshots
+
+The aggregate loader supports snapshots for performance. When loading an aggregate, it first checks for the latest snapshot and replays only events after the snapshot version, avoiding full event replay for long-lived streams.

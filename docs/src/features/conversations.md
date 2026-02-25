@@ -29,9 +29,17 @@ During streaming, the LLM may request tool calls:
 
 Tool calls are recorded as `ToolCallStarted` and `ToolCallCompleted` events.
 
+## RAG Context
+
+When RAG is configured, the user's message is embedded and searched against accessible collections. Relevant document chunks are included as context for the LLM. RAG sources are tracked per message for transparency.
+
 ## Forking
 
 Conversations can be forked at any message position, creating a new independent conversation with the history up to that point. The fork creates a new event stream with copied events and remapped IDs.
+
+## Editing Messages
+
+Users can edit a previously sent message. This truncates the conversation at that message position and re-sends with the new content, effectively creating a new branch point.
 
 ## Sharing
 
@@ -47,4 +55,4 @@ Conversations can be archived individually or in bulk. Archived conversations ar
 
 ## Stream Recovery
 
-A periodic sweeper (`Liteskill.Chat.StreamRecovery`) detects conversations stuck in streaming state for more than 5 minutes and automatically recovers them by failing the stream.
+A periodic sweeper (`Liteskill.Chat.StreamRecovery`) detects conversations stuck in streaming state for more than 5 minutes and automatically recovers them by failing the stream. Additionally, the `StreamRegistry` monitors active streaming tasks and triggers immediate recovery if a task crashes.

@@ -38,6 +38,14 @@ Password auth uses Argon2 for hashing (configured with `t_cost: 1, m_cost: 8` in
 - Requires current password verification
 - Admins can set temporary passwords that force a change on next login
 
+## Single-User Mode
+
+When `SINGLE_USER_MODE=true`:
+
+- The login screen is skipped entirely
+- `SingleUser.auto_user/0` returns the admin user for every request
+- An admin user is auto-provisioned on boot if not present
+
 ## Invitations
 
 Admins can create invitation tokens for specific email addresses:
@@ -46,16 +54,12 @@ Admins can create invitation tokens for specific email addresses:
 2. Invitation generates a unique token
 3. User visits `/invite/:token` to register
 4. Token is marked as used after acceptance
-5. Invitations expire after a configured period
 
 ## OpenRouter OAuth
 
-For OpenRouter provider setup, Liteskill supports OAuth PKCE flow:
+Liteskill supports OpenRouter OAuth PKCE flow for connecting user-level OpenRouter accounts:
 
-- `GET /auth/openrouter` starts the flow
-- `GET /auth/openrouter/callback` completes it
-- State is tracked via `Liteskill.OpenRouter.StateStore`
-
-## Single-User Mode
-
-When `SINGLE_USER_MODE=true`, the login screen is bypassed and an admin user is auto-provisioned.
+1. User initiates at `GET /auth/openrouter`
+2. PKCE challenge is generated and state stored in `Liteskill.OpenRouter.StateStore`
+3. User authorizes on OpenRouter
+4. Callback at `GET /auth/openrouter/callback` exchanges the code for credentials

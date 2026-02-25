@@ -17,10 +17,10 @@ Liteskill uses PostgreSQL 16 with the **pgvector** extension for vector similari
 - `snapshots` — Aggregate snapshots for performance
 
 ### Projections (Chat)
-- `conversations` — Current conversation state
-- `messages` — Projected messages
-- `message_chunks` — Streaming chunks
-- `tool_calls` — Tool call records
+- `conversations` — Current conversation state (stream_id, title, status, model, message_count)
+- `messages` — Projected messages (role, content, status, token counts, position)
+- `message_chunks` — Streaming chunks (delta_text, delta_type, chunk_index)
+- `tool_calls` — Tool call records (name, arguments, status, result)
 
 ### Accounts & Auth
 - `users` — User records (OIDC and password auth)
@@ -29,31 +29,36 @@ Liteskill uses PostgreSQL 16 with the **pgvector** extension for vector similari
 - `rbac_roles` / `rbac_role_permissions` / `rbac_user_roles` — Role-based access control
 
 ### LLM
-- `llm_providers` — Provider configurations (API keys, regions, types)
-- `llm_models` — Model definitions linked to providers
+- `llm_providers` — Provider configurations (API keys encrypted, regions, types)
+- `llm_models` — Model definitions linked to providers (costs, context window, type)
 - `usage_records` — Token/cost tracking per API call
 
 ### RAG
-- `rag_collections` — Top-level grouping for embeddings
+- `rag_collections` — Top-level grouping for embeddings (configurable dimension)
 - `rag_sources` — Sources within collections
 - `rag_documents` — Documents to be chunked and embedded
 - `rag_chunks` — Chunked text with pgvector embeddings
-- `embedding_requests` — Embedding API call logs
 
 ### Data Sources
 - `data_sources` — External connectors (Google Drive, Confluence, Jira, GitHub, GitLab, SharePoint)
 - `data_source_documents` — Documents synced from connectors
 
+### Agents & Teams
+- `agent_definitions` — AI agent configurations (backstory, strategy, model)
+- `team_definitions` — Agent team compositions
+- `team_members` — Position-ordered team membership with roles
+
+### Runs
+- `runs` — Agent/team execution records (status, prompt, topology)
+- `run_tasks` — Individual task tracking within a run
+- `run_logs` — Structured execution logs (level, step, message, metadata)
+
 ### Features
 - `reports` / `report_sections` / `section_comments` — Structured report documents
-- `agent_definitions` — AI agent configurations
-- `team_definitions` — Agent team compositions
-- `runs` / `run_logs` / `run_tasks` — Agent execution tracking
-- `schedules` — Cron-based recurring run definitions
+- `schedules` — Cron-based scheduled runs
 - `mcp_servers` — MCP server registrations
-- `user_tool_selections` — Per-user MCP server selection state
-- `groups` / `group_memberships` — User groups
+- `user_tool_selections` — Per-user MCP server selections
+- `settings` — Application-wide settings
 
-## pgvector
-
-The `rag_chunks` table stores vector embeddings using the pgvector extension. Similarity search uses the `<=>` (cosine distance) operator.
+### Background Jobs
+- `oban_jobs` / `oban_peers` — Oban background job queue tables

@@ -5,8 +5,8 @@
 | Variable | Description |
 |----------|-------------|
 | `DATABASE_URL` | PostgreSQL connection string (e.g. `ecto://USER:PASS@HOST/DATABASE`) |
-| `SECRET_KEY_BASE` | Phoenix secret key (generate with `mix phx.gen.secret`) |
-| `ENCRYPTION_KEY` | Key for AES-256-GCM encryption of sensitive fields (32+ chars) |
+| `SECRET_KEY_BASE` | Phoenix secret key (generate with `mix phx.gen.secret` or `openssl rand -base64 64`) |
+| `ENCRYPTION_KEY` | Key for AES-256-GCM encryption of sensitive fields (generate with `openssl rand -base64 32`) |
 | `PHX_SERVER` | Set to `true` to start the HTTP server (required for releases) |
 
 ## Server
@@ -18,6 +18,7 @@
 | `ECTO_IPV6` | — | Set to `true` or `1` to enable IPv6 for database connections |
 | `POOL_SIZE` | `10` | Database connection pool size |
 | `DNS_CLUSTER_QUERY` | — | DNS query for node clustering |
+| `FORCE_SSL` | — | Set to `false` to disable SSL enforcement (e.g. for local Docker) |
 
 ## Authentication
 
@@ -45,33 +46,21 @@
 
 When `LITESKILL_DESKTOP=true`:
 
+- A bundled PostgreSQL instance is managed automatically
+- Encryption key and secret key base are auto-generated and stored in `desktop_config.json`
+- Single-user mode is enabled automatically
 - Data is stored in platform-specific directories:
   - macOS: `~/Library/Application Support/Liteskill`
   - Linux: `$XDG_DATA_HOME/liteskill` (default: `~/.local/share/liteskill`)
   - Windows: `%APPDATA%/Liteskill`
-- Encryption key and secret key base are auto-generated and persisted in `desktop_config.json`
-- Single-user mode is automatically enabled
-- PostgreSQL connects via Unix socket (or TCP on Windows with `LITESKILL_PG_PORT`)
 
-## Docker Compose
+## Docker Compose Defaults
 
-The `docker-compose.yml` expects these variables (with defaults):
+The `docker-compose.yml` uses these defaults (overridable via shell environment):
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `POSTGRES_USER` | `liteskill` | PostgreSQL user |
-| `POSTGRES_PASSWORD` | `liteskill` | PostgreSQL password |
-| `POSTGRES_DB` | `liteskill` | PostgreSQL database name |
-| `SECRET_KEY_BASE` | (required) | Phoenix secret key |
-| `ENCRYPTION_KEY` | (required) | Encryption key |
-| `PHX_HOST` | `localhost` | Public hostname |
-| `AWS_BEARER_TOKEN_BEDROCK` | — | Optional Bedrock token |
-| `AWS_REGION` | `us-east-1` | AWS region |
-
-## ReqLLM
-
-Configured in `runtime.exs` (not via env vars):
-
-- `stream_receive_timeout`: 120,000ms
-- `receive_timeout`: 120,000ms
-- Finch pool: 25 connections, HTTP/1.1
+| Variable | Default |
+|----------|---------|
+| `POSTGRES_USER` | `liteskill` |
+| `POSTGRES_PASSWORD` | `liteskill` |
+| `POSTGRES_DB` | `liteskill` |
+| `PHX_HOST` | `localhost` |

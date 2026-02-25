@@ -5,5 +5,9 @@ multilingual = false
 src = "src"
 title = "Liteskill Documentation"
 
+[output.html]
+default-theme = "navy"
+favicon = "favicon.png"
+
 [build]
 build-dir = "book"
