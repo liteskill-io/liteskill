@@ -17,13 +17,14 @@ defmodule Liteskill.LLM.StreamHandler do
   alias Liteskill.Chat.{ConversationAggregate, Projector}
   alias Liteskill.LlmGateway.{ProviderGate, TokenBucket}
   alias Liteskill.LLM.ToolUtils
+  alias Liteskill.Retry
   alias Liteskill.Usage
 
   require Logger
 
   @max_retries 3
   @default_backoff_ms 1000
-  @tool_approval_timeout_ms 300_000
+  @default_tool_approval_timeout_ms 300_000
 
   @doc """
   Handles a full streaming LLM call for a conversation.
@@ -243,6 +244,9 @@ defmodule Liteskill.LLM.StreamHandler do
            delta_text: text_chunk
          }}
 
+      # Chunks use async projection: high-frequency fire-and-forget writes where
+      # ordering gaps are acceptable. All other events (stream start/complete,
+      # tool calls) use sync projection for discrete ordering guarantees.
       case Loader.execute(ConversationAggregate, stream_id, command) do
         {:ok, _state, events} -> Projector.project_events_async(stream_id, events)
         # coveralls-ignore-next-line
@@ -255,55 +259,37 @@ defmodule Liteskill.LLM.StreamHandler do
 
     case stream_fn.(model_id, messages, on_text_chunk, call_opts) do
       {:ok, full_content, tool_calls, usage} ->
-        latency_ms = System.monotonic_time(:millisecond) - start_time
-
-        if tool_calls != [] do
-          # coveralls-ignore-start
-          handle_tool_calls(
-            stream_id,
-            message_id,
-            messages,
-            full_content,
-            tool_calls,
-            latency_ms,
-            usage,
-            opts
-          )
-
-          # coveralls-ignore-stop
-        else
-          complete_stream(stream_id, message_id, full_content, latency_ms, usage, opts)
-        end
+        handle_stream_success(
+          stream_id,
+          message_id,
+          messages,
+          full_content,
+          tool_calls,
+          start_time,
+          usage,
+          opts
+        )
 
       {:ok, full_content, tool_calls} ->
-        latency_ms = System.monotonic_time(:millisecond) - start_time
-
-        if tool_calls != [] do
-          handle_tool_calls(
-            stream_id,
-            message_id,
-            messages,
-            full_content,
-            tool_calls,
-            latency_ms,
-            nil,
-            opts
-          )
-        else
-          complete_stream(stream_id, message_id, full_content, latency_ms, nil, opts)
-        end
+        handle_stream_success(
+          stream_id,
+          message_id,
+          messages,
+          full_content,
+          tool_calls,
+          start_time,
+          nil,
+          opts
+        )
 
       {:error, reason} ->
         if retryable_error?(reason) do
           label = retryable_error_label(reason)
           base_backoff = Keyword.get(opts, :backoff_ms, @default_backoff_ms)
+          rate_limited = match?(%{status: 429}, reason)
 
-          # Use longer backoff for 429 rate-limit errors
-          base_backoff =
-            if match?(%{status: 429}, reason), do: base_backoff * 3, else: base_backoff
-
-          jitter = :rand.uniform()
-          backoff = trunc(base_backoff * Integer.pow(2, retry_count) * (1 + jitter))
+          backoff =
+            Retry.calculate_backoff(base_backoff, retry_count, rate_limited: rate_limited)
 
           :telemetry.execute(
             [:liteskill, :llm, :retry],
@@ -315,14 +301,8 @@ defmodule Liteskill.LLM.StreamHandler do
             "StreamHandler #{label}, retrying in #{backoff}ms (attempt #{retry_count + 1})"
           )
 
-          # Interruptible sleep — responds to cancel during backoff
           # coveralls-ignore-start — cancel path untestable without race
-          receive do
-            :cancel -> :cancelled
-          after
-            backoff -> :ok
-          end
-
+          Retry.interruptible_sleep(backoff)
           # coveralls-ignore-stop
           # Clean up orphaned chunks from the failed attempt
           Liteskill.Chat.delete_message_chunks(message_id)
@@ -660,6 +640,36 @@ defmodule Liteskill.LLM.StreamHandler do
   """
   defdelegate format_tool_output(result), to: ToolUtils
 
+  # -- Stream success dispatch --
+
+  defp handle_stream_success(
+         stream_id,
+         message_id,
+         messages,
+         full_content,
+         tool_calls,
+         start_time,
+         usage,
+         opts
+       ) do
+    latency_ms = System.monotonic_time(:millisecond) - start_time
+
+    if tool_calls != [] do
+      handle_tool_calls(
+        stream_id,
+        message_id,
+        messages,
+        full_content,
+        tool_calls,
+        latency_ms,
+        usage,
+        opts
+      )
+    else
+      complete_stream(stream_id, message_id, full_content, latency_ms, usage, opts)
+    end
+  end
+
   # -- Tool call handling --
 
   defp handle_tool_calls(
@@ -817,7 +827,7 @@ defmodule Liteskill.LLM.StreamHandler do
        ) do
     tool_servers = Keyword.get(opts, :tool_servers, %{})
     pending_ids = MapSet.new(parsed_tool_calls, & &1.tool_use_id)
-    timeout_ms = Keyword.get(opts, :tool_approval_timeout_ms, @tool_approval_timeout_ms)
+    timeout_ms = Keyword.get(opts, :tool_approval_timeout_ms, @default_tool_approval_timeout_ms)
     decisions = await_tool_decisions(pending_ids, %{}, timeout_ms)
 
     Enum.map(parsed_tool_calls, fn tc ->

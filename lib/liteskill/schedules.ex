@@ -86,6 +86,7 @@ defmodule Liteskill.Schedules do
     Schedule
     |> where([s], s.user_id == ^user_id or s.id in subquery(accessible_ids))
     |> order_by([s], asc: s.name)
+    |> limit(1000)
     |> preload(:team_definition)
     |> Repo.all()
   end

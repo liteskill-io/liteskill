@@ -1,7 +1,13 @@
 defmodule Liteskill.McpServers do
   use Boundary,
     top_level?: true,
-    deps: [Liteskill.Authorization, Liteskill.Rbac, Liteskill.BuiltinTools, Liteskill.Settings],
+    deps: [
+      Liteskill.Authorization,
+      Liteskill.Rbac,
+      Liteskill.BuiltinTools,
+      Liteskill.Settings,
+      Liteskill.Retry
+    ],
     exports: [McpServer, Client, UserToolSelection]
 
   @moduledoc """
@@ -22,6 +28,7 @@ defmodule Liteskill.McpServers do
       McpServer
       |> where([s], s.user_id == ^user_id or s.global == true or s.id in subquery(accessible_ids))
       |> order_by([s], asc: s.name)
+      |> limit(1000)
       |> Repo.all()
 
     Liteskill.BuiltinTools.virtual_servers() ++ db_servers

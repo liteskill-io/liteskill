@@ -98,92 +98,20 @@ defmodule Liteskill.LlmGateway.ProviderGate do
     now = System.monotonic_time(:millisecond)
 
     cond do
-      # Retry-After backoff still active
       state.retry_after_until > now ->
-        remaining = state.retry_after_until - now
+        deny_retry_after(state, now)
 
-        :telemetry.execute(
-          [:liteskill, :llm_gateway, :circuit_opened],
-          %{count: 1},
-          %{provider_id: state.provider_id, reason: :retry_after}
-        )
-
-        {:reply, {:error, :retry_after, remaining}, state}
-
-      # Circuit is open — check if cooldown expired
       state.circuit_state == :open ->
-        if now - state.circuit_opened_at >= state.circuit_cooldown_ms do
-          # Transition to half_open, allow one probe
-          ref = make_ref()
-          mon = Process.monitor(caller_pid)
+        try_transition_half_open(state, now, caller_pid)
 
-          :telemetry.execute(
-            [:liteskill, :llm_gateway, :checkout],
-            %{count: 1},
-            %{provider_id: state.provider_id, circuit_state: :half_open}
-          )
-
-          state = %{
-            state
-            | circuit_state: :half_open,
-              half_open_ref: ref,
-              in_flight: state.in_flight + 1,
-              active_refs: MapSet.put(state.active_refs, ref),
-              ref_monitors: Map.put(state.ref_monitors, ref, mon)
-          }
-
-          {:reply, {:ok, ref}, state}
-        else
-          remaining = state.circuit_cooldown_ms - (now - state.circuit_opened_at)
-
-          :telemetry.execute(
-            [:liteskill, :llm_gateway, :circuit_opened],
-            %{count: 1},
-            %{provider_id: state.provider_id, reason: :circuit_open}
-          )
-
-          {:reply, {:error, :circuit_open, remaining}, state}
-        end
-
-      # Half-open — only allow the probe request through
       state.circuit_state == :half_open ->
-        :telemetry.execute(
-          [:liteskill, :llm_gateway, :concurrency_limited],
-          %{count: 1},
-          %{provider_id: state.provider_id, reason: :half_open_probe_in_flight}
-        )
+        deny_half_open_in_flight(state)
 
-        {:reply, {:error, :circuit_open, state.circuit_cooldown_ms}, state}
-
-      # Concurrency cap reached
       state.in_flight >= state.max_concurrency ->
-        :telemetry.execute(
-          [:liteskill, :llm_gateway, :concurrency_limited],
-          %{count: 1},
-          %{provider_id: state.provider_id, reason: :max_concurrency}
-        )
+        deny_concurrency(state)
 
-        {:reply, {:error, :concurrency_limit}, state}
-
-      # Normal checkout
       true ->
-        ref = make_ref()
-        mon = Process.monitor(caller_pid)
-
-        :telemetry.execute(
-          [:liteskill, :llm_gateway, :checkout],
-          %{count: 1},
-          %{provider_id: state.provider_id, circuit_state: :closed}
-        )
-
-        state = %{
-          state
-          | in_flight: state.in_flight + 1,
-            active_refs: MapSet.put(state.active_refs, ref),
-            ref_monitors: Map.put(state.ref_monitors, ref, mon)
-        }
-
-        {:reply, {:ok, ref}, state}
+        do_checkout(state, caller_pid)
     end
   end
 
@@ -199,6 +127,94 @@ defmodule Liteskill.LlmGateway.ProviderGate do
     }
 
     {:reply, {:ok, status}, state}
+  end
+
+  # -- Checkout helpers --
+
+  defp deny_retry_after(state, now) do
+    remaining = state.retry_after_until - now
+
+    :telemetry.execute(
+      [:liteskill, :llm_gateway, :circuit_opened],
+      %{count: 1},
+      %{provider_id: state.provider_id, reason: :retry_after}
+    )
+
+    {:reply, {:error, :retry_after, remaining}, state}
+  end
+
+  defp try_transition_half_open(state, now, caller_pid) do
+    if now - state.circuit_opened_at >= state.circuit_cooldown_ms do
+      ref = make_ref()
+      mon = Process.monitor(caller_pid)
+
+      :telemetry.execute(
+        [:liteskill, :llm_gateway, :checkout],
+        %{count: 1},
+        %{provider_id: state.provider_id, circuit_state: :half_open}
+      )
+
+      state = %{
+        state
+        | circuit_state: :half_open,
+          half_open_ref: ref,
+          in_flight: state.in_flight + 1,
+          active_refs: MapSet.put(state.active_refs, ref),
+          ref_monitors: Map.put(state.ref_monitors, ref, mon)
+      }
+
+      {:reply, {:ok, ref}, state}
+    else
+      remaining = state.circuit_cooldown_ms - (now - state.circuit_opened_at)
+
+      :telemetry.execute(
+        [:liteskill, :llm_gateway, :circuit_opened],
+        %{count: 1},
+        %{provider_id: state.provider_id, reason: :circuit_open}
+      )
+
+      {:reply, {:error, :circuit_open, remaining}, state}
+    end
+  end
+
+  defp deny_half_open_in_flight(state) do
+    :telemetry.execute(
+      [:liteskill, :llm_gateway, :concurrency_limited],
+      %{count: 1},
+      %{provider_id: state.provider_id, reason: :half_open_probe_in_flight}
+    )
+
+    {:reply, {:error, :circuit_open, state.circuit_cooldown_ms}, state}
+  end
+
+  defp deny_concurrency(state) do
+    :telemetry.execute(
+      [:liteskill, :llm_gateway, :concurrency_limited],
+      %{count: 1},
+      %{provider_id: state.provider_id, reason: :max_concurrency}
+    )
+
+    {:reply, {:error, :concurrency_limit}, state}
+  end
+
+  defp do_checkout(state, caller_pid) do
+    ref = make_ref()
+    mon = Process.monitor(caller_pid)
+
+    :telemetry.execute(
+      [:liteskill, :llm_gateway, :checkout],
+      %{count: 1},
+      %{provider_id: state.provider_id, circuit_state: :closed}
+    )
+
+    state = %{
+      state
+      | in_flight: state.in_flight + 1,
+        active_refs: MapSet.put(state.active_refs, ref),
+        ref_monitors: Map.put(state.ref_monitors, ref, mon)
+    }
+
+    {:reply, {:ok, ref}, state}
   end
 
   @impl true

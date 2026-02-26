@@ -57,6 +57,7 @@ defmodule Liteskill.Reports do
     Report
     |> where([r], r.user_id == ^user_id or r.id in subquery(accessible_ids))
     |> order_by([r], desc: r.updated_at)
+    |> limit(1000)
     |> Repo.all()
   end
 

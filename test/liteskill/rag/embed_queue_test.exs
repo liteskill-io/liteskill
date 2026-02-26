@@ -1,6 +1,8 @@
 defmodule Liteskill.Rag.EmbedQueueTest do
   use Liteskill.DataCase, async: false
 
+  import Liteskill.RetryTestHelpers
+
   alias Liteskill.Rag.{EmbedQueue, CohereClient}
 
   setup do
@@ -124,10 +126,10 @@ defmodule Liteskill.Rag.EmbedQueueTest do
     test "retries on 429 then succeeds", %{queue: name} do
       embedding = List.duplicate(0.1, 1024)
 
-      {:ok, counter} = Agent.start_link(fn -> 0 end)
+      counter = retry_counter()
 
       Req.Test.stub(CohereClient, fn conn ->
-        call_num = Agent.get_and_update(counter, fn n -> {n, n + 1} end)
+        call_num = next_count(counter)
 
         if call_num == 0 do
           conn
@@ -217,10 +219,10 @@ defmodule Liteskill.Rag.EmbedQueueTest do
         )
 
       embedding = List.duplicate(0.1, 4)
-      {:ok, counter} = Agent.start_link(fn -> 0 end)
+      counter = retry_counter()
 
       Req.Test.stub(CohereClient, fn conn ->
-        call_num = Agent.get_and_update(counter, fn n -> {n, n + 1} end)
+        call_num = next_count(counter)
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         decoded = Jason.decode!(body)
         count = length(decoded["texts"])
@@ -271,10 +273,10 @@ defmodule Liteskill.Rag.EmbedQueueTest do
     test "retries on 503 then succeeds", %{queue: name} do
       embedding = List.duplicate(0.1, 4)
 
-      {:ok, counter} = Agent.start_link(fn -> 0 end)
+      counter = retry_counter()
 
       Req.Test.stub(CohereClient, fn conn ->
-        call_num = Agent.get_and_update(counter, fn n -> {n, n + 1} end)
+        call_num = next_count(counter)
 
         if call_num == 0 do
           conn

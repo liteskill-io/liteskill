@@ -168,6 +168,7 @@ defmodule Liteskill.DataSources do
       Source
       |> where([s], s.user_id == ^user_id or s.id in subquery(accessible_ids))
       |> order_by([s], asc: s.name)
+      |> limit(1000)
       |> Repo.all()
 
     Liteskill.BuiltinSources.virtual_sources() ++ db_sources
@@ -176,9 +177,19 @@ defmodule Liteskill.DataSources do
   @doc "Like `list_sources/1` but includes `:document_count` on each source."
   @spec list_sources_with_counts(Ecto.UUID.t()) :: [map()]
   def list_sources_with_counts(user_id) do
-    list_sources(user_id)
-    |> Enum.map(fn source ->
-      Map.put(source, :document_count, document_count(source.id))
+    sources = list_sources(user_id)
+    source_ids = Enum.map(sources, & &1.id)
+
+    counts =
+      Document
+      |> where([d], d.source_ref in ^source_ids)
+      |> group_by([d], d.source_ref)
+      |> select([d], {d.source_ref, count(d.id)})
+      |> Repo.all()
+      |> Map.new()
+
+    Enum.map(sources, fn source ->
+      Map.put(source, :document_count, Map.get(counts, source.id, 0))
     end)
   end
 
@@ -274,6 +285,7 @@ defmodule Liteskill.DataSources do
     Document
     |> where([d], d.source_ref == ^source_ref and d.user_id == ^user_id)
     |> order_by([d], desc: d.updated_at)
+    |> limit(1000)
     |> Repo.all()
   end
 

@@ -10,7 +10,8 @@ defmodule Liteskill.Agents do
       Liteskill.Usage,
       Liteskill.LlmModels,
       Liteskill.Rag,
-      Liteskill.DataSources
+      Liteskill.DataSources,
+      Liteskill.Retry
     ],
     exports: [AgentDefinition, ToolResolver, JidoAgent, Actions.LlmGenerate]
 
@@ -80,6 +81,7 @@ defmodule Liteskill.Agents do
     AgentDefinition
     |> where([a], a.user_id == ^user_id or a.id in subquery(accessible_ids))
     |> order_by([a], asc: a.name)
+    |> limit(1000)
     |> preload([:llm_model])
     |> Repo.all()
   end
@@ -136,6 +138,7 @@ defmodule Liteskill.Agents do
     Liteskill.McpServers.McpServer
     |> where([s], s.id in ^server_ids)
     |> order_by([s], asc: s.name)
+    |> limit(1000)
     |> Repo.all()
   end
 

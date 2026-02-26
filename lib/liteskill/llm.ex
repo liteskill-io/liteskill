@@ -8,7 +8,8 @@ defmodule Liteskill.LLM do
       Liteskill.Usage,
       Liteskill.LlmModels,
       Liteskill.LlmGateway,
-      Liteskill.McpServers
+      Liteskill.McpServers,
+      Liteskill.Retry
     ],
     exports: [StreamHandler, ToolUtils, RagContext]
 

@@ -1,6 +1,8 @@
 defmodule Liteskill.LLM.StreamHandlerTest do
   use Liteskill.DataCase, async: false
 
+  import Liteskill.RetryTestHelpers
+
   alias Liteskill.Chat
   alias Liteskill.EventStore.Postgres, as: Store
   alias Liteskill.LLM.StreamHandler
@@ -242,10 +244,10 @@ defmodule Liteskill.LLM.StreamHandlerTest do
   end
 
   test "retries on 503 with backoff then succeeds", %{conversation: conv} do
-    {:ok, counter} = Agent.start_link(fn -> 0 end)
+    counter = retry_counter()
 
     retry_fn = fn _model, _msgs, on_chunk, _opts ->
-      count = Agent.get_and_update(counter, &{&1, &1 + 1})
+      count = next_count(counter)
 
       if count < 1 do
         {:error, %{status: 503, body: "unavailable"}}
@@ -290,10 +292,10 @@ defmodule Liteskill.LLM.StreamHandlerTest do
   end
 
   test "retries on transport error then succeeds", %{conversation: conv} do
-    {:ok, counter} = Agent.start_link(fn -> 0 end)
+    counter = retry_counter()
 
     retry_fn = fn _model, _msgs, on_chunk, _opts ->
-      count = Agent.get_and_update(counter, &{&1, &1 + 1})
+      count = next_count(counter)
 
       if count < 1 do
         {:error, %Mint.TransportError{reason: :timeout}}
@@ -320,10 +322,10 @@ defmodule Liteskill.LLM.StreamHandlerTest do
   end
 
   test "retries on HTTP 408 timeout then succeeds", %{conversation: conv} do
-    {:ok, counter} = Agent.start_link(fn -> 0 end)
+    counter = retry_counter()
 
     retry_fn = fn _model, _msgs, on_chunk, _opts ->
-      count = Agent.get_and_update(counter, &{&1, &1 + 1})
+      count = next_count(counter)
 
       if count < 1 do
         {:error, %{status: 408, body: "Request Timeout"}}
@@ -350,10 +352,10 @@ defmodule Liteskill.LLM.StreamHandlerTest do
   end
 
   test "retries on :timeout atom error then succeeds", %{conversation: conv} do
-    {:ok, counter} = Agent.start_link(fn -> 0 end)
+    counter = retry_counter()
 
     retry_fn = fn _model, _msgs, on_chunk, _opts ->
-      count = Agent.get_and_update(counter, &{&1, &1 + 1})
+      count = next_count(counter)
 
       if count < 1 do
         {:error, :timeout}
@@ -397,10 +399,10 @@ defmodule Liteskill.LLM.StreamHandlerTest do
   test "retries on ReqLLM timeout error (reason: timeout, status: nil) then succeeds", %{
     conversation: conv
   } do
-    {:ok, counter} = Agent.start_link(fn -> 0 end)
+    counter = retry_counter()
 
     retry_fn = fn _model, _msgs, on_chunk, _opts ->
-      count = Agent.get_and_update(counter, &{&1, &1 + 1})
+      count = next_count(counter)
 
       if count < 1 do
         {:error, %ReqLLM.Error.API.Request{reason: "timeout", status: nil}}
@@ -427,10 +429,10 @@ defmodule Liteskill.LLM.StreamHandlerTest do
   end
 
   test "retries on GenServer call timeout tuple then succeeds", %{conversation: conv} do
-    {:ok, counter} = Agent.start_link(fn -> 0 end)
+    counter = retry_counter()
 
     retry_fn = fn _model, _msgs, on_chunk, _opts ->
-      count = Agent.get_and_update(counter, &{&1, &1 + 1})
+      count = next_count(counter)
 
       if count < 1 do
         {:error, {:timeout, {GenServer, :call, [self(), {:next, 30_000}, 31_000]}}}

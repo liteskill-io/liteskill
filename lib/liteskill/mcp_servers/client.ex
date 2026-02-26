@@ -92,6 +92,7 @@ defmodule Liteskill.McpServers.Client do
 
   @mcp_max_retries 2
   @mcp_default_backoff_ms 500
+  @default_receive_timeout_ms 60_000
 
   defp send_request(server, body, session_id, opts, attempt \\ 0) do
     case do_post(server, body, session_id, opts) do
@@ -122,8 +123,7 @@ defmodule Liteskill.McpServers.Client do
 
   defp backoff_and_retry(server, body, session_id, opts, attempt) do
     backoff_ms = Keyword.get(opts, :mcp_backoff_ms, @mcp_default_backoff_ms)
-    jitter = :rand.uniform()
-    backoff = trunc(backoff_ms * Integer.pow(2, attempt) * (1 + jitter))
+    backoff = Liteskill.Retry.calculate_backoff(backoff_ms, attempt)
     Process.sleep(backoff)
     send_request(server, body, session_id, opts, attempt + 1)
   end
@@ -138,7 +138,7 @@ defmodule Liteskill.McpServers.Client do
         headers: build_headers(server) ++ session_header(session_id)
       ] ++ req_opts
 
-    timeout = Keyword.get(opts, :receive_timeout, 60_000)
+    timeout = Keyword.get(opts, :receive_timeout, @default_receive_timeout_ms)
 
     case Req.post(Req.new(receive_timeout: timeout), all_opts) do
       {:ok, resp} -> {:ok, %{resp | body: parse_body(resp.body)}}

@@ -22,12 +22,13 @@ defmodule Liteskill.Agents.Actions.LlmGenerate do
 
   alias Liteskill.LlmGateway.{ProviderGate, TokenBucket}
   alias Liteskill.LLM.{StreamHandler, ToolUtils}
+  alias Liteskill.Retry
 
   require Logger
 
   @max_retries 3
   @default_backoff_ms 1000
-  @default_receive_timeout 300_000
+  @default_receive_timeout_ms 300_000
   @default_max_iterations 25
   @default_keep_rounds 4
 
@@ -316,7 +317,7 @@ defmodule Liteskill.Agents.Actions.LlmGenerate do
     req_opts = Keyword.merge(req_opts, Application.get_env(:liteskill, :test_req_opts, []))
 
     # Per-call receive timeout to prevent indefinitely stuck calls
-    req_opts = Keyword.put_new(req_opts, :receive_timeout, @default_receive_timeout)
+    req_opts = Keyword.put_new(req_opts, :receive_timeout, @default_receive_timeout_ms)
 
     req_opts = Keyword.put(req_opts, :system_prompt, system_prompt)
 
@@ -393,13 +394,11 @@ defmodule Liteskill.Agents.Actions.LlmGenerate do
       {:error, reason} ->
         if attempt < @max_retries && StreamHandler.retryable_error?(reason) do
           backoff_ms = Keyword.get(state[:retry_opts] || [], :backoff_ms, @default_backoff_ms)
+          rate_limited = match?(%{status: 429}, reason)
 
-          # Use longer backoff for 429 rate-limit errors
-          backoff_ms =
-            if match?(%{status: 429}, reason), do: backoff_ms * 3, else: backoff_ms
+          backoff =
+            Retry.calculate_backoff(backoff_ms, attempt, rate_limited: rate_limited)
 
-          jitter = :rand.uniform()
-          backoff = trunc(backoff_ms * Integer.pow(2, attempt) * (1 + jitter))
           label = StreamHandler.retryable_error_label(reason)
 
           :telemetry.execute(
@@ -413,14 +412,8 @@ defmodule Liteskill.Agents.Actions.LlmGenerate do
               "retrying in #{backoff}ms (attempt #{attempt + 1}/#{@max_retries})"
           )
 
-          # Interruptible sleep — responds to cancel during backoff
           # coveralls-ignore-start — cancel path untestable without race
-          receive do
-            :cancel -> :cancelled
-          after
-            backoff -> :ok
-          end
-
+          Retry.interruptible_sleep(backoff)
           # coveralls-ignore-stop
           generate_with_retry(model_spec, llm_context, req_opts, state, attempt + 1)
         else

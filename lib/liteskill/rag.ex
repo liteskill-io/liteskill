@@ -57,6 +57,7 @@ defmodule Liteskill.Rag do
     Collection
     |> where([c], c.user_id == ^user_id)
     |> order_by([c], asc: c.name)
+    |> limit(1000)
     |> Repo.all()
   end
 
