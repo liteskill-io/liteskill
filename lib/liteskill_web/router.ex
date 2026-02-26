@@ -70,7 +70,7 @@ defmodule LiteskillWeb.Router do
       live "/admin/models", AdminLive, :admin_models
       live "/admin/roles", AdminLive, :admin_roles
       live "/admin/rag", AdminLive, :admin_rag
-      live "/admin/setup", AdminLive, :admin_setup
+      live "/admin/setup", SetupLive, :admin_setup
       # Settings routes (single-user mode unified settings page)
       live "/settings", AdminLive, :settings_usage
       live "/settings/general", AdminLive, :settings_general

@@ -47,7 +47,6 @@
     "lib/liteskill_web/live/admin_live/models_tab.ex",
     "lib/liteskill_web/live/admin_live/roles_tab.ex",
     "lib/liteskill_web/live/admin_live/rag_tab.ex",
-    "lib/liteskill_web/live/admin_live/setup_tab.ex",
     "lib/liteskill_web/live/chat_live/sources_handler.ex",
     "lib/liteskill_web/live/chat_live/conversations_handler.ex",
     "lib/liteskill_web/live/chat_live/cost_handler.ex",

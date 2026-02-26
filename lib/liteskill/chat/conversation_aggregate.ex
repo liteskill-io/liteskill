@@ -299,6 +299,13 @@ defmodule Liteskill.Chat.ConversationAggregate do
     }
   end
 
+  # coveralls-ignore-start - defensive guard for out-of-order event replay
+  def apply_event(%{current_stream: nil} = state, %{event_type: "AssistantChunkReceived"}) do
+    state
+  end
+
+  # coveralls-ignore-stop
+
   def apply_event(state, %{event_type: "AssistantChunkReceived", data: data}) do
     chunk = %{
       chunk_index: data["chunk_index"],
@@ -333,6 +340,13 @@ defmodule Liteskill.Chat.ConversationAggregate do
   def apply_event(state, %{event_type: "AssistantStreamFailed", data: _data}) do
     %{state | status: :active, current_stream: nil}
   end
+
+  # coveralls-ignore-start - defensive guard for out-of-order event replay
+  def apply_event(%{current_stream: nil} = state, %{event_type: "ToolCallStarted"}) do
+    state
+  end
+
+  # coveralls-ignore-stop
 
   def apply_event(state, %{event_type: "ToolCallStarted", data: data}) do
     tool_call = %{

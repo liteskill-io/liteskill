@@ -369,8 +369,8 @@ defmodule Liteskill.Chat.ProjectorTest do
         %{event_type: "UnknownEvent", data: %{"foo" => "bar"}}
       ])
 
-    # Should not crash
-    Projector.project_events(stream_id, events)
+    # Should not crash and should return :ok
+    assert :ok = Projector.project_events(stream_id, events)
   end
 
   test "projects AssistantStreamFailed when message does not exist", %{user: user} do
@@ -400,6 +400,7 @@ defmodule Liteskill.Chat.ProjectorTest do
     # Project an event for a stream that has no ConversationCreated projection.
     # The projector should log a warning and not crash.
     fake_stream_id = "conversation-#{Ecto.UUID.generate()}"
+    prior_count = Repo.aggregate(Message, :count)
 
     {:ok, events} =
       Store.append_events(fake_stream_id, 0, [
@@ -416,6 +417,9 @@ defmodule Liteskill.Chat.ProjectorTest do
     # Should not raise — the projector should skip gracefully
     Projector.project_events(fake_stream_id, events)
 
+    # No message was inserted
+    assert Repo.aggregate(Message, :count) == prior_count
+
     # Projector should still be alive
     assert Process.alive?(Process.whereis(Liteskill.Chat.Projector))
   end
@@ -423,6 +427,7 @@ defmodule Liteskill.Chat.ProjectorTest do
   test "handles ToolCallCompleted for missing tool call gracefully" do
     # ToolCallCompleted for a tool_use_id that doesn't exist in projections
     fake_stream_id = "conversation-#{Ecto.UUID.generate()}"
+    prior_count = Repo.aggregate(ToolCall, :count)
 
     {:ok, events} =
       Store.append_events(fake_stream_id, 0, [
@@ -441,14 +446,18 @@ defmodule Liteskill.Chat.ProjectorTest do
     # Should not raise
     Projector.project_events(fake_stream_id, events)
 
+    # No tool call was created or modified
+    assert Repo.aggregate(ToolCall, :count) == prior_count
+
     assert Process.alive?(Process.whereis(Liteskill.Chat.Projector))
   end
 
   test "handles info messages that are not events" do
     # The projector GenServer should handle unexpected messages
     send(Liteskill.Chat.Projector, :unexpected_message)
-    _ = :sys.get_state(Liteskill.Chat.Projector)
-    # Should still be alive
+    state = :sys.get_state(Liteskill.Chat.Projector)
+    # Should still be alive with valid state
+    assert is_map(state)
     assert Process.alive?(Process.whereis(Liteskill.Chat.Projector))
   end
 

@@ -282,7 +282,7 @@ defmodule Liteskill.Chat.Projector do
       input: data["input"],
       status: "started"
     })
-    |> Repo.insert!()
+    |> Repo.insert!(on_conflict: :nothing, conflict_target: [:tool_use_id])
   end
 
   defp project_event(%Event{event_type: "ToolCallCompleted", data: data}) do

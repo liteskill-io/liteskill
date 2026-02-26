@@ -83,7 +83,17 @@ defmodule Liteskill.LlmGateway.TokenBucketTest do
   end
 
   test "sweep_stale removes old entries" do
-    # Just verify it doesn't crash - actual cleanup tested via the real table
-    assert is_integer(TokenBucket.sweep_stale(0))
+    # Insert a request to create an ETS entry, then sweep with max_age_ms=0
+    # to mark everything as stale
+    user_id = Ecto.UUID.generate()
+    assert :ok = TokenBucket.check_rate(user_id, "sweep-model", limit: 10, window_ms: 60_000)
+
+    # Sweep with 0 age - everything is stale
+    deleted = TokenBucket.sweep_stale(0)
+    assert is_integer(deleted)
+    assert deleted >= 1
+
+    # The entry was removed, so this user can make requests again from count=1
+    assert :ok = TokenBucket.check_rate(user_id, "sweep-model", limit: 1, window_ms: 60_000)
   end
 end

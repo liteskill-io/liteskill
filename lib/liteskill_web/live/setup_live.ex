@@ -20,15 +20,12 @@ defmodule LiteskillWeb.SetupLive do
   @impl true
   def mount(_params, _session, socket) do
     mode = if SingleUser.enabled?(), do: :single_user, else: :server
-    steps = compute_steps(mode)
 
     socket =
       socket
       |> assign(
-        page_title: "Initial Setup",
         mode: mode,
-        steps: steps,
-        step: hd(steps),
+        wizard_mode: :initial,
         form: to_form(%{"password" => "", "password_confirmation" => ""}, as: :setup),
         error: nil,
         selected_permissions: MapSet.new(Rbac.Permissions.default_permissions()),
@@ -54,7 +51,73 @@ defmodule LiteskillWeb.SetupLive do
       )
       |> load_embed_models()
 
-    {:ok, socket, layout: {LiteskillWeb.Layouts, :root}}
+    {:ok, socket}
+  end
+
+  @impl true
+  def handle_params(_params, _uri, socket) do
+    wizard_mode =
+      case socket.assigns.live_action do
+        :admin_setup -> :admin_rerun
+        _ -> :initial
+      end
+
+    socket = apply_wizard_mode(socket, wizard_mode)
+    {:noreply, socket}
+  end
+
+  defp apply_wizard_mode(socket, :admin_rerun) do
+    mode = socket.assigns.mode
+    user_id = socket.assigns.current_user.id
+    available = DataSources.available_source_types()
+
+    existing_types =
+      available
+      |> Enum.map(& &1.source_type)
+      |> Enum.filter(&DataSources.get_source_by_type(user_id, &1))
+      |> MapSet.new()
+
+    default_perms =
+      case Rbac.get_role_by_name!("Default") do
+        %{permissions: perms} -> MapSet.new(perms)
+      end
+
+    settings = Settings.get()
+
+    steps =
+      if mode == :single_user do
+        [:providers, :models, :rag, :data_sources]
+      else
+        [:password, :default_permissions, :providers, :models, :rag, :data_sources]
+      end
+
+    socket
+    |> assign(
+      wizard_mode: :admin_rerun,
+      page_title: "Setup Wizard",
+      steps: steps,
+      step: hd(steps),
+      selected_permissions: default_perms,
+      data_sources: available,
+      selected_sources: existing_types,
+      llm_providers: LlmProviders.list_all_providers(),
+      llm_models: LlmModels.list_all_models(),
+      rag_embedding_models: LlmModels.list_all_active_models(model_type: "embedding"),
+      rag_current_model: settings.embedding_model
+    )
+    |> load_embed_models()
+  end
+
+  defp apply_wizard_mode(socket, :initial) do
+    mode = socket.assigns.mode
+    steps = compute_steps(mode)
+
+    assign(socket,
+      wizard_mode: :initial,
+      page_title: "Initial Setup",
+      steps: steps,
+      step: hd(steps)
+    )
   end
 
   defp compute_steps(:single_user) do
@@ -74,8 +137,17 @@ defmodule LiteskillWeb.SetupLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen flex items-center justify-center bg-base-200 px-4">
+    <div class={[
+      "min-h-screen flex items-center justify-center px-4",
+      if(@wizard_mode == :initial, do: "bg-base-200", else: "")
+    ]}>
       <div class="w-full max-w-2xl">
+        <div :if={@wizard_mode == :admin_rerun} class="mb-4">
+          <.link navigate={~p"/admin/servers"} class="btn btn-ghost btn-sm gap-1">
+            <.icon name="hero-arrow-left-micro" class="size-4" /> Back to Server
+          </.link>
+        </div>
+
         <div :if={length(@steps) > 1} class="flex gap-2 mb-6">
           <.step_indicator
             :for={{s, idx} <- Enum.with_index(@steps, 1)}
@@ -92,7 +164,7 @@ defmodule LiteskillWeb.SetupLive do
           <% :welcome -> %>
             <.welcome_step />
           <% :password -> %>
-            <.password_step form={@form} error={@error} />
+            <.password_step form={@form} error={@error} wizard_mode={@wizard_mode} />
           <% :default_permissions -> %>
             <.default_permissions_step selected_permissions={@selected_permissions} />
           <% :providers -> %>
@@ -234,17 +306,22 @@ defmodule LiteskillWeb.SetupLive do
 
   attr :form, :any, required: true
   attr :error, :string
+  attr :wizard_mode, :atom, default: :initial
 
   defp password_step(assigns) do
     ~H"""
     <div class="card bg-base-100 shadow-xl w-full max-w-md mx-auto">
       <div class="card-body">
-        <h2 class="card-title text-2xl">Welcome to Liteskill</h2>
+        <h2 class="card-title text-2xl">
+          {if @wizard_mode == :admin_rerun, do: "Admin Password", else: "Welcome to Liteskill"}
+        </h2>
         <p class="text-base-content/70">
-          Set a password for the admin account to get started.
+          {if @wizard_mode == :admin_rerun,
+            do: "Update the admin account password, or skip to keep the current one.",
+            else: "Set a password for the admin account to get started."}
         </p>
 
-        <.form for={@form} phx-submit="setup" class="mt-4 space-y-4">
+        <.form for={@form} phx-submit="setup_password" class="mt-4 space-y-4">
           <div class="form-control">
             <label class="label"><span class="label-text">Password</span></label>
             <input
@@ -273,7 +350,16 @@ defmodule LiteskillWeb.SetupLive do
 
           <p :if={@error} class="text-error text-sm">{@error}</p>
 
-          <button type="submit" class="btn btn-primary w-full">Set Password & Continue</button>
+          <%= if @wizard_mode == :admin_rerun do %>
+            <div class="flex gap-3">
+              <button type="button" phx-click="setup_skip_password" class="btn btn-ghost flex-1">
+                Skip
+              </button>
+              <button type="submit" class="btn btn-primary flex-1">Set Password & Continue</button>
+            </div>
+          <% else %>
+            <button type="submit" class="btn btn-primary w-full">Set Password & Continue</button>
+          <% end %>
         </.form>
       </div>
     </div>
@@ -303,7 +389,7 @@ defmodule LiteskillWeb.SetupLive do
                 <label class="flex items-center gap-2 py-0.5 cursor-pointer">
                   <input
                     type="checkbox"
-                    phx-click="toggle_permission"
+                    phx-click="setup_toggle_permission"
                     phx-value-permission={perm}
                     checked={MapSet.member?(@selected_permissions, perm)}
                     class="checkbox checkbox-sm"
@@ -316,10 +402,10 @@ defmodule LiteskillWeb.SetupLive do
         </div>
 
         <div class="flex gap-3 mt-8">
-          <button type="button" phx-click="skip_permissions" class="btn btn-ghost flex-1">
+          <button type="button" phx-click="setup_skip_permissions" class="btn btn-ghost flex-1">
             Skip
           </button>
-          <button type="button" phx-click="save_permissions" class="btn btn-primary flex-1">
+          <button type="button" phx-click="setup_save_permissions" class="btn btn-primary flex-1">
             Save & Continue
           </button>
         </div>
@@ -360,7 +446,7 @@ defmodule LiteskillWeb.SetupLive do
 
           <button
             type="button"
-            phx-click="openrouter_connect"
+            phx-click="setup_openrouter_connect"
             disabled={@openrouter_pending}
             class={[
               "flex flex-col items-center gap-3 p-6 rounded-xl border-2 transition-all",
@@ -832,7 +918,7 @@ defmodule LiteskillWeb.SetupLive do
             <% coming_soon = source.source_type in ~w(sharepoint confluence jira github gitlab) %>
             <button
               type="button"
-              phx-click={unless(coming_soon, do: "toggle_source")}
+              phx-click={unless(coming_soon, do: "setup_toggle_source")}
               phx-value-source-type={source.source_type}
               disabled={coming_soon}
               class={[
@@ -873,10 +959,10 @@ defmodule LiteskillWeb.SetupLive do
         </div>
 
         <div class="flex gap-3 mt-8">
-          <button phx-click="skip_sources" class="btn btn-ghost flex-1">
+          <button phx-click="setup_skip_sources" class="btn btn-ghost flex-1">
             Skip for now
           </button>
-          <button phx-click="save_sources" class="btn btn-primary flex-1">
+          <button phx-click="setup_save_sources" class="btn btn-primary flex-1">
             Continue
           </button>
         </div>
@@ -911,7 +997,7 @@ defmodule LiteskillWeb.SetupLive do
           </div>
         </div>
 
-        <.form for={@config_form} phx-submit="save_config" class="space-y-4">
+        <.form for={@config_form} phx-submit="setup_save_config" class="space-y-4">
           <div :for={field <- @config_fields} class="form-control">
             <label class="label"><span class="label-text">{field.label}</span></label>
             <%= if field.type == :textarea do %>
@@ -932,7 +1018,7 @@ defmodule LiteskillWeb.SetupLive do
           </div>
 
           <div class="flex gap-3 mt-6">
-            <button type="button" phx-click="skip_config" class="btn btn-ghost flex-1">
+            <button type="button" phx-click="setup_skip_config" class="btn btn-ghost flex-1">
               Skip
             </button>
             <button type="submit" class="btn btn-primary flex-1">
@@ -958,13 +1044,22 @@ defmodule LiteskillWeb.SetupLive do
 
     case Enum.at(steps, current_idx + 1) do
       nil ->
-        if socket.assigns.mode == :single_user, do: Settings.dismiss_setup()
-        finish_url = if socket.assigns.mode == :single_user, do: "/", else: "/login"
-        assign(socket, step: current) |> redirect(to: finish_url)
+        finish_wizard(socket)
 
       next_step ->
         assign(socket, step: next_step, error: nil)
     end
+  end
+
+  defp finish_wizard(%{assigns: %{wizard_mode: :admin_rerun}} = socket) do
+    assign(socket, step: socket.assigns.step)
+    |> push_navigate(to: ~p"/admin/servers")
+  end
+
+  defp finish_wizard(socket) do
+    if socket.assigns.mode == :single_user, do: Settings.dismiss_setup()
+    finish_url = if socket.assigns.mode == :single_user, do: "/", else: "/login"
+    assign(socket, step: socket.assigns.step) |> redirect(to: finish_url)
   end
 
   # --- Event handlers: Welcome ---
@@ -974,10 +1069,10 @@ defmodule LiteskillWeb.SetupLive do
     {:noreply, advance_step(socket)}
   end
 
-  # --- Event handlers: Password (server mode) ---
+  # --- Event handlers: Password ---
 
   @impl true
-  def handle_event("setup", %{"setup" => params}, socket) do
+  def handle_event("setup_password", %{"setup" => params}, socket) do
     password = params["password"]
     confirmation = params["password_confirmation"]
 
@@ -1002,10 +1097,15 @@ defmodule LiteskillWeb.SetupLive do
     end
   end
 
+  @impl true
+  def handle_event("setup_skip_password", _params, socket) do
+    {:noreply, advance_step(socket)}
+  end
+
   # --- Event handlers: Permissions ---
 
   @impl true
-  def handle_event("toggle_permission", %{"permission" => permission}, socket) do
+  def handle_event("setup_toggle_permission", %{"permission" => permission}, socket) do
     selected = socket.assigns.selected_permissions
 
     selected =
@@ -1017,7 +1117,7 @@ defmodule LiteskillWeb.SetupLive do
   end
 
   @impl true
-  def handle_event("save_permissions", _params, socket) do
+  def handle_event("setup_save_permissions", _params, socket) do
     permissions = MapSet.to_list(socket.assigns.selected_permissions)
     role = Rbac.get_role_by_name!("Default")
 
@@ -1031,20 +1131,23 @@ defmodule LiteskillWeb.SetupLive do
   end
 
   @impl true
-  def handle_event("skip_permissions", _params, socket) do
+  def handle_event("setup_skip_permissions", _params, socket) do
     {:noreply, advance_step(socket)}
   end
 
   # --- Event handlers: OpenRouter OAuth ---
 
   @impl true
-  def handle_event("openrouter_connect", _params, socket) do
+  def handle_event("setup_openrouter_connect", _params, socket) do
+    return_to =
+      if socket.assigns.wizard_mode == :admin_rerun, do: "/admin/setup", else: "/setup"
+
     if SingleUser.enabled?() do
       user = socket.assigns.current_user
       {verifier, challenge} = OpenRouter.generate_pkce()
       callback_url = LiteskillWeb.Endpoint.url() <> ~p"/auth/openrouter/callback"
 
-      state = OpenRouter.StateStore.store(verifier, user.id, "/setup")
+      state = OpenRouter.StateStore.store(verifier, user.id, return_to)
       auth_url = OpenRouter.auth_url(callback_url <> "?state=#{state}", challenge)
 
       Phoenix.PubSub.subscribe(Liteskill.PubSub, OpenRouterController.openrouter_topic(user.id))
@@ -1054,7 +1157,7 @@ defmodule LiteskillWeb.SetupLive do
        |> assign(openrouter_pending: true)
        |> push_event("open_external_url", %{url: auth_url})}
     else
-      {:noreply, redirect(socket, to: ~p"/auth/openrouter?return_to=/setup")}
+      {:noreply, redirect(socket, to: ~p"/auth/openrouter?return_to=#{return_to}")}
     end
   end
 
@@ -1309,7 +1412,7 @@ defmodule LiteskillWeb.SetupLive do
   # --- Event handlers: Data sources ---
 
   @impl true
-  def handle_event("toggle_source", %{"source-type" => source_type}, socket) do
+  def handle_event("setup_toggle_source", %{"source-type" => source_type}, socket) do
     selected = socket.assigns.selected_sources
 
     selected =
@@ -1323,7 +1426,7 @@ defmodule LiteskillWeb.SetupLive do
   end
 
   @impl true
-  def handle_event("save_sources", _params, socket) do
+  def handle_event("setup_save_sources", _params, socket) do
     user_id = socket.assigns.current_user.id
     selected = socket.assigns.selected_sources
     data_sources = socket.assigns.data_sources
@@ -1332,40 +1435,50 @@ defmodule LiteskillWeb.SetupLive do
       Enum.filter(data_sources, fn source -> MapSet.member?(selected, source.source_type) end)
 
     if sources_to_configure == [] do
-      {:noreply, advance_step(socket)}
+      {:noreply, finish_wizard(socket)}
     else
       {created_sources, error} =
         Enum.reduce_while(sources_to_configure, {[], nil}, fn source, {acc, _} ->
-          case DataSources.create_source(
-                 %{name: source.name, source_type: source.source_type, description: ""},
-                 user_id
-               ) do
-            {:ok, db_source} ->
-              {:cont, {[Map.put(source, :db_id, db_source.id) | acc], nil}}
-
-            {:error, reason} ->
-              {:halt, {acc, action_error("create source #{source.name}", reason)}}
+          case ensure_source_exists(source, user_id) do
+            {:ok, enriched} -> {:cont, {[enriched | acc], nil}}
+            {:error, msg} -> {:halt, {acc, msg}}
           end
         end)
 
       if error do
         {:noreply, assign(socket, error: error)}
       else
+        sources = Enum.reverse(created_sources)
+        first = hd(sources)
+
+        config_form =
+          if socket.assigns.wizard_mode == :admin_rerun do
+            existing_metadata =
+              case DataSources.get_source(first.db_id, user_id) do
+                {:ok, s} -> s.metadata || %{}
+                _ -> %{}
+              end
+
+            to_form(existing_metadata, as: :config)
+          else
+            to_form(%{}, as: :config)
+          end
+
         {:noreply,
          socket
          |> assign(
            step: :configure_source,
            steps: socket.assigns.steps ++ [:configure_source],
-           sources_to_configure: Enum.reverse(created_sources),
+           sources_to_configure: sources,
            current_config_index: 0,
-           config_form: to_form(%{}, as: :config)
+           config_form: config_form
          )}
       end
     end
   end
 
   @impl true
-  def handle_event("save_config", %{"config" => config_params}, socket) do
+  def handle_event("setup_save_config", %{"config" => config_params}, socket) do
     current_source =
       Enum.at(socket.assigns.sources_to_configure, socket.assigns.current_config_index)
 
@@ -1387,13 +1500,13 @@ defmodule LiteskillWeb.SetupLive do
   end
 
   @impl true
-  def handle_event("skip_config", _params, socket) do
+  def handle_event("setup_skip_config", _params, socket) do
     advance_config(socket)
   end
 
   @impl true
-  def handle_event("skip_sources", _params, socket) do
-    {:noreply, advance_step(socket)}
+  def handle_event("setup_skip_sources", _params, socket) do
+    {:noreply, finish_wizard(socket)}
   end
 
   # --- PubSub: OpenRouter connected (desktop mode) ---
@@ -1411,16 +1524,57 @@ defmodule LiteskillWeb.SetupLive do
     next_index = socket.assigns.current_config_index + 1
 
     if next_index >= length(socket.assigns.sources_to_configure) do
-      if socket.assigns.mode == :single_user, do: Settings.dismiss_setup()
-      finish_url = if socket.assigns.mode == :single_user, do: "/", else: "/login"
-      {:noreply, redirect(socket, to: finish_url)}
+      case socket.assigns.wizard_mode do
+        :admin_rerun ->
+          {:noreply, push_navigate(socket, to: ~p"/admin/servers")}
+
+        :initial ->
+          if socket.assigns.mode == :single_user, do: Settings.dismiss_setup()
+          finish_url = if socket.assigns.mode == :single_user, do: "/", else: "/login"
+          {:noreply, redirect(socket, to: finish_url)}
+      end
     else
+      user_id = socket.assigns.current_user.id
+      next_source = Enum.at(socket.assigns.sources_to_configure, next_index)
+
+      config_form =
+        if socket.assigns.wizard_mode == :admin_rerun do
+          existing_metadata =
+            case DataSources.get_source(next_source.db_id, user_id) do
+              {:ok, s} -> s.metadata || %{}
+              _ -> %{}
+            end
+
+          to_form(existing_metadata, as: :config)
+        else
+          to_form(%{}, as: :config)
+        end
+
       {:noreply,
        socket
        |> assign(
          current_config_index: next_index,
-         config_form: to_form(%{}, as: :config)
+         config_form: config_form
        )}
+    end
+  end
+
+  defp ensure_source_exists(source, user_id) do
+    case DataSources.get_source_by_type(user_id, source.source_type) do
+      %{id: id} ->
+        {:ok, Map.put(source, :db_id, id)}
+
+      nil ->
+        case DataSources.create_source(
+               %{name: source.name, source_type: source.source_type, description: ""},
+               user_id
+             ) do
+          {:ok, db_source} ->
+            {:ok, Map.put(source, :db_id, db_source.id)}
+
+          {:error, reason} ->
+            {:error, action_error("create source #{source.name}", reason)}
+        end
     end
   end
 

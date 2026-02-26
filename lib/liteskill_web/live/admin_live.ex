@@ -13,7 +13,6 @@ defmodule LiteskillWeb.AdminLive do
   alias LiteskillWeb.AdminLive.RagTab
   alias LiteskillWeb.AdminLive.RolesTab
   alias LiteskillWeb.AdminLive.ServerTab
-  alias LiteskillWeb.AdminLive.SetupTab
   alias LiteskillWeb.AdminLive.UsageTab
   alias LiteskillWeb.AdminLive.UsersTab
   alias LiteskillWeb.Layouts
@@ -30,8 +29,7 @@ defmodule LiteskillWeb.AdminLive do
     :admin_providers,
     :admin_models,
     :admin_roles,
-    :admin_rag,
-    :admin_setup
+    :admin_rag
   ]
 
   def admin_action?(action), do: action in @admin_actions
@@ -49,8 +47,7 @@ defmodule LiteskillWeb.AdminLive do
       ProvidersTab.assigns() ++
       ModelsTab.assigns() ++
       RolesTab.assigns() ++
-      RagTab.assigns() ++
-      SetupTab.assigns()
+      RagTab.assigns()
   end
 
   # --- LiveView callbacks ---
@@ -118,7 +115,6 @@ defmodule LiteskillWeb.AdminLive do
   defp load_tab_data(socket, :admin_models), do: ModelsTab.load_data(socket)
   defp load_tab_data(socket, :admin_roles), do: RolesTab.load_data(socket)
   defp load_tab_data(socket, :admin_rag), do: RagTab.load_data(socket)
-  defp load_tab_data(socket, :admin_setup), do: SetupTab.load_data(socket)
 
   # --- Render ---
 
@@ -187,23 +183,6 @@ defmodule LiteskillWeb.AdminLive do
             role_users={@role_users}
             role_groups={@role_groups}
             role_user_search={@role_user_search}
-            setup_steps={@setup_steps}
-            setup_step={@setup_step}
-            setup_form={@setup_form}
-            setup_error={@setup_error}
-            setup_selected_permissions={@setup_selected_permissions}
-            setup_data_sources={@setup_data_sources}
-            setup_selected_sources={@setup_selected_sources}
-            setup_sources_to_configure={@setup_sources_to_configure}
-            setup_current_config_index={@setup_current_config_index}
-            setup_config_form={@setup_config_form}
-            setup_llm_providers={@setup_llm_providers}
-            setup_llm_models={@setup_llm_models}
-            setup_llm_provider_form={@setup_llm_provider_form}
-            setup_llm_model_form={@setup_llm_model_form}
-            setup_rag_embedding_models={@setup_rag_embedding_models}
-            setup_rag_current_model={@setup_rag_current_model}
-            setup_provider_view={@setup_provider_view}
             rag_embedding_models={@rag_embedding_models}
             rag_current_model={@rag_current_model}
             rag_stats={@rag_stats}
@@ -248,26 +227,6 @@ defmodule LiteskillWeb.AdminLive do
   attr :admin_usage_data, :map, default: %{}
   attr :admin_usage_period, :string, default: "30d"
 
-  attr :setup_steps, :list,
-    default: [:password, :default_permissions, :providers, :models, :rag, :data_sources]
-
-  attr :setup_step, :atom, default: :password
-  attr :setup_form, :any
-  attr :setup_error, :string, default: nil
-  attr :setup_selected_permissions, :any, default: nil
-  attr :setup_data_sources, :list, default: []
-  attr :setup_selected_sources, :any, default: nil
-  attr :setup_sources_to_configure, :list, default: []
-  attr :setup_current_config_index, :integer, default: 0
-  attr :setup_config_form, :any
-  attr :setup_llm_providers, :list, default: []
-  attr :setup_llm_models, :list, default: []
-  attr :setup_llm_provider_form, :any
-  attr :setup_llm_model_form, :any
-  attr :setup_rag_embedding_models, :list, default: []
-  attr :setup_rag_current_model, :any, default: nil
-  attr :setup_provider_view, :atom, default: :presets
-  attr :setup_openrouter_pending, :boolean, default: false
   attr :rbac_roles, :list, default: []
   attr :editing_role, :any, default: nil
   attr :role_form, :any
@@ -406,7 +365,6 @@ defmodule LiteskillWeb.AdminLive do
   defp render_tab(%{live_action: :admin_models} = a), do: ModelsTab.render_tab(a)
   defp render_tab(%{live_action: :admin_roles} = a), do: RolesTab.render_tab(a)
   defp render_tab(%{live_action: :admin_rag} = a), do: RagTab.render_tab(a)
-  defp render_tab(%{live_action: :admin_setup} = a), do: SetupTab.render_tab(a)
 
   # --- Event dispatch ---
 
@@ -418,8 +376,6 @@ defmodule LiteskillWeb.AdminLive do
   @model_events ~w(new_llm_model cancel_llm_model create_llm_model edit_llm_model update_llm_model delete_llm_model)
   @role_events ~w(new_role cancel_role edit_role create_role update_role delete_role assign_role_user remove_role_user assign_role_group remove_role_group)
   @rag_events ~w(rag_select_model rag_cancel_change rag_confirm_input_change rag_confirm_model_change)
-  @setup_events ~w(setup_password setup_skip_password setup_toggle_permission setup_save_permissions setup_skip_permissions setup_openrouter_connect setup_providers_show_custom setup_providers_show_presets setup_create_provider setup_providers_continue setup_providers_skip or_search or_select_model embed_search embed_select_model setup_create_model setup_models_continue setup_models_skip setup_select_embedding setup_rag_skip setup_toggle_source setup_save_sources setup_save_config setup_skip_config setup_skip_sources)
-
   @impl true
   def handle_event("toggle_sidebar", _params, socket) do
     {:noreply, assign(socket, sidebar_open: !socket.assigns.sidebar_open)}
@@ -446,8 +402,6 @@ defmodule LiteskillWeb.AdminLive do
   def handle_event(e, p, s) when e in @role_events, do: RolesTab.handle_event(e, p, s)
   @impl true
   def handle_event(e, p, s) when e in @rag_events, do: RagTab.handle_event(e, p, s)
-  @impl true
-  def handle_event(e, p, s) when e in @setup_events, do: SetupTab.handle_event(e, p, s)
 
   # --- Profile Event Delegation (for settings_account) ---
 
@@ -463,15 +417,6 @@ defmodule LiteskillWeb.AdminLive do
   end
 
   # --- handle_info callbacks ---
-
-  @impl true
-  def handle_info(:openrouter_connected, socket) do
-    {:noreply,
-     assign(socket,
-       setup_openrouter_pending: false,
-       setup_llm_providers: Liteskill.LlmProviders.list_all_providers()
-     )}
-  end
 
   @impl true
   def handle_info(_msg, socket), do: {:noreply, socket}

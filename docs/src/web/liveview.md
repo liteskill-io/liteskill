@@ -37,7 +37,11 @@ Multi-tab admin dashboard with separate tab modules:
 - `ModelsTab` — LLM model configuration
 - `RolesTab` — RBAC role management
 - `RagTab` — RAG settings and collection management
-- `SetupTab` — Application settings
+
+### SetupLive
+
+Setup wizard used for both first-time admin setup (`/setup`) and admin re-run (`/admin/setup`).
+Dual-mode: `:initial` skips existing config; `:admin_rerun` loads current DB state.
 
 ### AgentStudioLive
 

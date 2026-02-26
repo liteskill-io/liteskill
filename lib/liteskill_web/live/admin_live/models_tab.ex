@@ -14,7 +14,13 @@ defmodule LiteskillWeb.AdminLive.ModelsTab do
     [
       llm_models: [],
       editing_llm_model: nil,
-      llm_model_form: to_form(%{}, as: :llm_model)
+      llm_model_form: to_form(%{}, as: :llm_model),
+      or_search: "",
+      or_results: [],
+      or_loading: false,
+      embed_results_all: [],
+      embed_search: "",
+      embed_results: []
     ]
   end
 
