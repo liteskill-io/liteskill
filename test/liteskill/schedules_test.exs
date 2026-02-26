@@ -1,5 +1,5 @@
 defmodule Liteskill.SchedulesTest do
-  use Liteskill.DataCase, async: false
+  use Liteskill.DataCase, async: true
 
   alias Liteskill.Schedules
   alias Liteskill.Schedules.Schedule

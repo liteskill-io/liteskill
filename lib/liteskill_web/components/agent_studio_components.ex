@@ -461,11 +461,11 @@ defmodule LiteskillWeb.AgentStudioComponents do
      "Responds immediately with no explicit reasoning steps. The agent gets the prompt and replies in one shot. Best for simple, well-defined tasks where extra deliberation adds no value."}
   end
 
+  defp strategy_info(other), do: {other, ""}
+
   defp strategy_label(s) do
     {label, _} = strategy_info(s)
     label
-  rescue
-    _ -> s
   end
 
   # ---- Teams ----

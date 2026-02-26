@@ -141,4 +141,45 @@ defmodule Liteskill.DataSources.SyncWorkerTest do
       )
     end
   end
+
+  describe "normalize_content_type/1" do
+    test "maps MIME types to short names" do
+      assert SyncWorker.normalize_content_type("text/plain") == "text"
+      assert SyncWorker.normalize_content_type("text/csv") == "text"
+      assert SyncWorker.normalize_content_type("text/markdown") == "markdown"
+      assert SyncWorker.normalize_content_type("text/html") == "html"
+      assert SyncWorker.normalize_content_type("application/json") == "text"
+    end
+
+    test "passes through already-normalized types" do
+      assert SyncWorker.normalize_content_type("markdown") == "markdown"
+      assert SyncWorker.normalize_content_type("text") == "text"
+      assert SyncWorker.normalize_content_type("html") == "html"
+    end
+
+    test "defaults unknown types to text" do
+      assert SyncWorker.normalize_content_type("application/pdf") == "text"
+      assert SyncWorker.normalize_content_type("image/png") == "text"
+    end
+  end
+
+  describe "sanitize_error/1" do
+    test "slices binary reasons to 500 chars" do
+      short = "something went wrong"
+      assert SyncWorker.sanitize_error(short) == short
+
+      long = String.duplicate("a", 600)
+      assert SyncWorker.sanitize_error(long) == String.slice(long, 0, 500)
+    end
+
+    test "converts atom reasons to strings" do
+      assert SyncWorker.sanitize_error(:timeout) == "timeout"
+      assert SyncWorker.sanitize_error(:econnrefused) == "econnrefused"
+    end
+
+    test "inspects and slices other terms" do
+      assert SyncWorker.sanitize_error({:error, :bad_gateway}) == "{:error, :bad_gateway}"
+      assert SyncWorker.sanitize_error(%{code: 500}) == "%{code: 500}"
+    end
+  end
 end

@@ -1,5 +1,5 @@
 defmodule Liteskill.RagTest do
-  use Liteskill.DataCase, async: false
+  use Liteskill.DataCase, async: true
 
   alias Liteskill.Rag
   alias Liteskill.Rag.{Collection, Source, Document, Chunk, CohereClient}

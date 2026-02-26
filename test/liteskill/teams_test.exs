@@ -1,5 +1,5 @@
 defmodule Liteskill.TeamsTest do
-  use Liteskill.DataCase, async: false
+  use Liteskill.DataCase, async: true
 
   alias Liteskill.Teams
   alias Liteskill.Teams.{TeamDefinition, TeamMember}

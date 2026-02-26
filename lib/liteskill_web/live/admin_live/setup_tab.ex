@@ -72,31 +72,19 @@ defmodule LiteskillWeb.AdminLive.SetupTab do
         [:password, :default_permissions, :providers, :models, :rag, :data_sources]
       end
 
-    assign(socket,
+    socket
+    |> assign(assigns())
+    |> assign(
       page_title: "Setup Wizard",
       setup_steps: steps,
       setup_step: hd(steps),
-      setup_form: to_form(%{"password" => "", "password_confirmation" => ""}, as: :setup),
-      setup_error: nil,
       setup_selected_permissions: default_perms,
       setup_data_sources: available,
       setup_selected_sources: existing_types,
-      setup_sources_to_configure: [],
-      setup_current_config_index: 0,
-      setup_config_form: to_form(%{}, as: :config),
       setup_llm_providers: LlmProviders.list_all_providers(),
       setup_llm_models: LlmModels.list_all_models(),
-      setup_llm_provider_form: to_form(%{}, as: :llm_provider),
-      setup_llm_model_form: to_form(%{}, as: :llm_model),
       setup_rag_embedding_models: LlmModels.list_all_active_models(model_type: "embedding"),
-      setup_rag_current_model: settings.embedding_model,
-      setup_provider_view: :presets,
-      setup_openrouter_pending: false,
-      or_models: nil,
-      or_search: "",
-      or_results: [],
-      or_loading: false,
-      embed_search: ""
+      setup_rag_current_model: settings.embedding_model
     )
     |> load_embed_models()
   end

@@ -19,7 +19,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
     assert is_reference(ref)
 
     :ok = ProviderGate.checkin(provider_id, ref, :ok)
-    Process.sleep(10)
 
     {:ok, status} = ProviderGate.status(provider_id)
     assert status.in_flight == 0
@@ -42,7 +41,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
 
     # Check one back in, should allow again
     ProviderGate.checkin(provider_id, hd(refs), :ok)
-    Process.sleep(10)
     assert {:ok, _ref} = ProviderGate.checkout(provider_id)
   end
 
@@ -61,9 +59,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
     for ref <- refs do
       ProviderGate.checkin(provider_id, ref, {:error, :non_retryable})
     end
-
-    # Allow cast processing
-    Process.sleep(20)
 
     {:ok, status} = ProviderGate.status(provider_id)
     assert status.circuit_state == :open
@@ -84,8 +79,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
       ProviderGate.checkin(provider_id, ref, {:error, :non_retryable})
     end
 
-    Process.sleep(20)
-
     # Fast-forward the circuit cooldown by manipulating state
     :sys.replace_state(pid, fn state ->
       %{state | circuit_opened_at: System.monotonic_time(:millisecond) - 31_000}
@@ -102,7 +95,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
 
     # Successful probe closes circuit
     ProviderGate.checkin(provider_id, ref, :ok)
-    Process.sleep(10)
 
     {:ok, status} = ProviderGate.status(provider_id)
     assert status.circuit_state == :closed
@@ -123,8 +115,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
       ProviderGate.checkin(provider_id, ref, {:error, :non_retryable})
     end
 
-    Process.sleep(20)
-
     # Fast-forward cooldown
     :sys.replace_state(pid, fn state ->
       %{state | circuit_opened_at: System.monotonic_time(:millisecond) - 31_000}
@@ -134,7 +124,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
 
     # Failed probe reopens
     ProviderGate.checkin(provider_id, ref, {:error, :non_retryable})
-    Process.sleep(10)
 
     {:ok, status} = ProviderGate.status(provider_id)
     assert status.circuit_state == :open
@@ -163,7 +152,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
 
     {:ok, ref} = ProviderGate.checkout(provider_id)
     ProviderGate.checkin(provider_id, ref, {:error, :retryable, 5_000})
-    Process.sleep(10)
 
     {:ok, status} = ProviderGate.status(provider_id)
     # retry_after_until should have been extended from initial value
@@ -180,7 +168,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
     ProviderGate.checkin(provider_id, ref, :ok)
     # Second checkin with same ref should be a no-op
     ProviderGate.checkin(provider_id, ref, :ok)
-    Process.sleep(10)
 
     {:ok, status} = ProviderGate.status(provider_id)
     assert status.in_flight == 0
@@ -203,8 +190,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
       ProviderGate.checkin(provider_id, ref, :ok)
     end
 
-    Process.sleep(20)
-
     {:ok, status} = ProviderGate.status(provider_id)
     assert status.circuit_state == :closed
   end
@@ -224,8 +209,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
       ProviderGate.checkin(provider_id, ref, result)
     end
 
-    Process.sleep(20)
-
     {:ok, status} = ProviderGate.status(provider_id)
     assert status.circuit_state == :closed
   end
@@ -244,8 +227,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
     for ref <- refs do
       ProviderGate.checkin(provider_id, ref, {:error, :non_retryable})
     end
-
-    Process.sleep(20)
 
     {:ok, status} = ProviderGate.status(provider_id)
     assert status.circuit_state == :open
@@ -282,7 +263,6 @@ defmodule Liteskill.LlmGateway.ProviderGateTest do
 
     {:ok, ref} = ProviderGate.checkout(provider_id)
     ProviderGate.checkin(provider_id, ref, {:error, :non_retryable})
-    Process.sleep(10)
 
     {:ok, status_after} = ProviderGate.status(provider_id)
     # retry_after_until should not have been extended

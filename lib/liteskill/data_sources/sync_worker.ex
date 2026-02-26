@@ -170,26 +170,22 @@ defmodule Liteskill.DataSources.SyncWorker do
     end
   end
 
-  # coveralls-ignore-start
-  defp normalize_content_type("text/plain"), do: "text"
-  defp normalize_content_type("text/csv"), do: "text"
-  defp normalize_content_type("text/markdown"), do: "markdown"
-  defp normalize_content_type("text/html"), do: "html"
-  defp normalize_content_type("application/json"), do: "text"
-  defp normalize_content_type(type) when type in ["markdown", "text", "html"], do: type
-  defp normalize_content_type(_), do: "text"
-  # coveralls-ignore-stop
+  @doc false
+  def normalize_content_type("text/plain"), do: "text"
+  def normalize_content_type("text/csv"), do: "text"
+  def normalize_content_type("text/markdown"), do: "markdown"
+  def normalize_content_type("text/html"), do: "html"
+  def normalize_content_type("application/json"), do: "text"
+  def normalize_content_type(type) when type in ["markdown", "text", "html"], do: type
+  def normalize_content_type(_), do: "text"
 
-  # coveralls-ignore-start
-  # sanitize_error clauses are defensive — connector errors always come as maps/tuples
-  defp sanitize_error(reason) when is_binary(reason), do: String.slice(reason, 0, 500)
-  defp sanitize_error(reason) when is_atom(reason), do: Atom.to_string(reason)
+  @doc false
+  def sanitize_error(reason) when is_binary(reason), do: String.slice(reason, 0, 500)
+  def sanitize_error(reason) when is_atom(reason), do: Atom.to_string(reason)
 
-  defp sanitize_error(reason) do
+  def sanitize_error(reason) do
     reason |> inspect() |> String.slice(0, 500)
   end
-
-  # coveralls-ignore-stop
 
   defp enqueue_document_sync(document_id, source_name, user_id, action, plug) do
     %{

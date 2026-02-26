@@ -1,5 +1,5 @@
 defmodule Liteskill.RunsTest do
-  use Liteskill.DataCase, async: false
+  use Liteskill.DataCase, async: true
 
   alias Liteskill.Runs
   alias Liteskill.Runs.{Run, RunLog, RunTask}
