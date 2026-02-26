@@ -558,7 +558,8 @@ defmodule Liteskill.LLM.StreamHandler do
   def extract_error_message(_reason), do: "LLM request failed"
 
   # Extract a user-friendly message from provider configuration errors
-  # e.g. "Failed to build stream request: %ReqLLM.Error.Invalid.Parameter{parameter: \":api_key option, ...OPENROUTER_API_KEY env var...\"}"
+  # e.g. "Failed to build stream request:
+  #   %ReqLLM.Error.Invalid.Parameter{parameter: \":api_key option, ...\"}"
   defp extract_provider_config_message(reason) do
     cond do
       reason =~ "Invalid.Parameter" && reason =~ "api_key" ->

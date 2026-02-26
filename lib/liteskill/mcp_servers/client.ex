@@ -124,7 +124,7 @@ defmodule Liteskill.McpServers.Client do
   defp backoff_and_retry(server, body, session_id, opts, attempt) do
     backoff_ms = Keyword.get(opts, :mcp_backoff_ms, @mcp_default_backoff_ms)
     backoff = Liteskill.Retry.calculate_backoff(backoff_ms, attempt)
-    Process.sleep(backoff)
+    Liteskill.Retry.interruptible_sleep(backoff)
     send_request(server, body, session_id, opts, attempt + 1)
   end
 

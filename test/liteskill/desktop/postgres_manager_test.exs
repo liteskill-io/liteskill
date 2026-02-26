@@ -571,7 +571,8 @@ defmodule Liteskill.Desktop.PostgresManagerTest do
 
       migrate_fn = fn ->
         # Simulate a migration that hangs longer than the timeout
-        Process.sleep(:infinity)
+        receive do
+        end
       end
 
       opts = build_opts(tmp_dir, migrate_fn: migrate_fn, migrate_timeout_ms: 50)

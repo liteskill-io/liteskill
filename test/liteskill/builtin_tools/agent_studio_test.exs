@@ -671,9 +671,6 @@ defmodule Liteskill.BuiltinTools.AgentStudioTest do
       assert data["status"] == "pending"
       assert data["message"] =~ "poll"
 
-      # Allow the async task to start
-      Process.sleep(50)
-
       # List
       assert {:ok, result} = AgentStudioTool.call_tool("agent_studio__list_runs", %{}, ctx)
       data = decode_content(result)
@@ -1053,8 +1050,8 @@ defmodule Liteskill.BuiltinTools.AgentStudioTest do
 
       data = decode_content(result)
       run_id = data["id"]
-      Process.sleep(50)
 
+      # cost_limit is set synchronously during create_run — no sleep needed
       {:ok, run} = Liteskill.Runs.get_run(run_id, user.id)
       admin_default = Liteskill.Settings.get_default_mcp_run_cost_limit()
       assert Decimal.compare(run.cost_limit, admin_default) == :eq
@@ -1072,7 +1069,6 @@ defmodule Liteskill.BuiltinTools.AgentStudioTest do
 
       data = decode_content(result)
       run_id = data["id"]
-      Process.sleep(50)
 
       {:ok, run} = Liteskill.Runs.get_run(run_id, user.id)
       admin_default = Liteskill.Settings.get_default_mcp_run_cost_limit()
@@ -1091,7 +1087,6 @@ defmodule Liteskill.BuiltinTools.AgentStudioTest do
 
       data = decode_content(result)
       run_id = data["id"]
-      Process.sleep(50)
 
       {:ok, run} = Liteskill.Runs.get_run(run_id, user.id)
       admin_default = Liteskill.Settings.get_default_mcp_run_cost_limit()
@@ -1110,7 +1105,6 @@ defmodule Liteskill.BuiltinTools.AgentStudioTest do
 
       data = decode_content(result)
       run_id = data["id"]
-      Process.sleep(50)
 
       {:ok, run} = Liteskill.Runs.get_run(run_id, user.id)
       assert Decimal.compare(run.cost_limit, Decimal.new("0.25")) == :eq

@@ -36,7 +36,8 @@ defmodule Liteskill.Chat.StreamRegistryTest do
 
       task =
         Task.async(fn ->
-          Process.sleep(:infinity)
+          receive do
+          end
         end)
 
       :ok = StreamRegistry.register(conv_id, task.pid, name: name)
@@ -70,7 +71,8 @@ defmodule Liteskill.Chat.StreamRegistryTest do
 
       task =
         Task.async(fn ->
-          Process.sleep(:infinity)
+          receive do
+          end
         end)
 
       :ok = StreamRegistry.register(conv_id, task.pid, name: name)
@@ -91,7 +93,8 @@ defmodule Liteskill.Chat.StreamRegistryTest do
 
       task =
         Task.async(fn ->
-          Process.sleep(:infinity)
+          receive do
+          end
         end)
 
       :ok = StreamRegistry.register(conv_id, task.pid, name: name)
@@ -167,8 +170,17 @@ defmodule Liteskill.Chat.StreamRegistryTest do
       conv_a = Ecto.UUID.generate()
       conv_b = Ecto.UUID.generate()
 
-      task_a = Task.async(fn -> Process.sleep(:infinity) end)
-      task_b = Task.async(fn -> Process.sleep(:infinity) end)
+      task_a =
+        Task.async(fn ->
+          receive do
+          end
+        end)
+
+      task_b =
+        Task.async(fn ->
+          receive do
+          end
+        end)
 
       :ok = StreamRegistry.register(conv_a, task_a.pid, name: name)
       :ok = StreamRegistry.register(conv_b, task_b.pid, name: name)

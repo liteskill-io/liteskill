@@ -774,8 +774,25 @@ defmodule Liteskill.LLM.StreamHandlerTest do
       approval_topic = "tool_approval:#{stream_id}"
       test_pid = self()
 
+      # Subscribe to event store topic so the approver can wait for the
+      # ToolCallStarted event instead of blindly sleeping
       spawn(fn ->
-        Process.sleep(50)
+        Phoenix.PubSub.subscribe(Liteskill.PubSub, "event_store:#{stream_id}")
+        send(test_pid, :approver_subscribed)
+
+        # Drain event batches until we see ToolCallStarted
+        wait = fn wait ->
+          receive do
+            {:events, _, events} ->
+              unless Enum.any?(events, &(&1.event_type == "ToolCallStarted")) do
+                wait.(wait)
+              end
+          after
+            5000 -> :timeout
+          end
+        end
+
+        wait.(wait)
 
         Phoenix.PubSub.broadcast(
           Liteskill.PubSub,
@@ -785,6 +802,9 @@ defmodule Liteskill.LLM.StreamHandlerTest do
 
         send(test_pid, :approval_sent)
       end)
+
+      # Ensure the approver is subscribed before starting the stream
+      assert_receive :approver_subscribed, 1000
 
       assert :ok =
                StreamHandler.handle_stream(stream_id, [%{role: :user, content: "test"}],
@@ -903,6 +923,21 @@ defmodule Liteskill.LLM.StreamHandlerTest do
 
     test "extracts reason from map" do
       assert StreamHandler.extract_error_message(%{reason: "some error"}) == "some error"
+    end
+
+    test "extracts provider config message for missing api_key with parameter hint" do
+      reason =
+        ~s(Failed to build stream request: %ReqLLM.Error.Invalid.Parameter{parameter: ":api_key option or OPENROUTER_API_KEY env var"})
+
+      assert StreamHandler.extract_error_message(%{reason: reason}) ==
+               "Missing API key: configure :api_key option or OPENROUTER_API_KEY env var"
+    end
+
+    test "extracts provider config message for missing api_key without parameter hint" do
+      reason = "Invalid.Parameter: api_key is required"
+
+      assert StreamHandler.extract_error_message(%{reason: reason}) ==
+               "Missing API key for the configured LLM provider. Check your provider settings."
     end
 
     test "passes through binary reason" do

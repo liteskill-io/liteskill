@@ -339,8 +339,6 @@ defmodule Liteskill.LlmModels do
         :ok
 
       # coveralls-ignore-stop
-      is_nil(user_id) ->
-        :ok
 
       true ->
         case Repo.get(LlmProvider, provider_id) do

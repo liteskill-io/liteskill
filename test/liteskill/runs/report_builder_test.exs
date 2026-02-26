@@ -271,8 +271,7 @@ defmodule Liteskill.Runs.ReportBuilderTest do
       assert {:ok, report_id} = ReportBuilder.get_or_create_report(run, agents, context)
       assert is_binary(report_id)
 
-      # Verify a create_report log was added
-      Process.sleep(50)
+      # Verify a create_report log was added (add_log is synchronous — no sleep needed)
       {:ok, updated_run} = Runs.get_run(run.id, owner.id)
 
       create_log =

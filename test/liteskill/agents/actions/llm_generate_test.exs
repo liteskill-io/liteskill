@@ -273,7 +273,8 @@ defmodule Liteskill.Agents.Actions.LlmGenerateTest do
           tool_servers: %{},
           user_id: nil,
           prompt: "fail",
-          prior_context: ""
+          prior_context: "",
+          retry_opts: [backoff_ms: 1]
         })
 
       assert {:error, %{reason: reason, messages: messages}} = LlmGenerate.run(%{}, context)

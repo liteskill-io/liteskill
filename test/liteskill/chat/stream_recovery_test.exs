@@ -56,7 +56,9 @@ defmodule Liteskill.Chat.StreamRecoveryTest do
           name: :test_stream_recovery
         )
 
-      Process.sleep(100)
+      # Trigger a sweep and wait for it to complete
+      send(pid, :sweep)
+      _ = :sys.get_state(pid)
 
       recovered = Repo.get!(Conversation, conv.id)
       assert recovered.status == "active"
@@ -75,7 +77,9 @@ defmodule Liteskill.Chat.StreamRecoveryTest do
           name: :test_stream_recovery_threshold
         )
 
-      Process.sleep(100)
+      # Trigger a sweep and wait for it to complete
+      send(pid, :sweep)
+      _ = :sys.get_state(pid)
 
       still_streaming = Repo.get!(Conversation, conv.id)
       assert still_streaming.status == "streaming"
