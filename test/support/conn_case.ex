@@ -31,6 +31,19 @@ defmodule LiteskillWeb.ConnCase do
     end
   end
 
+  @doc """
+  Initializes a test session with a server-side session token for the given user.
+  Use this instead of `init_test_session(%{user_id: user.id})`.
+  Accepts optional extra session data to merge in.
+  """
+  def init_authenticated_session(conn, user, extra_session \\ %{}) do
+    {:ok, session} = Liteskill.Accounts.create_session(user.id)
+    session_data = Map.merge(%{session_token: session.id}, extra_session)
+
+    conn
+    |> Plug.Test.init_test_session(session_data)
+  end
+
   setup tags do
     Liteskill.DataCase.setup_sandbox(tags)
     {:ok, conn: Phoenix.ConnTest.build_conn()}

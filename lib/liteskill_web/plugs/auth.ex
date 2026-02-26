@@ -9,6 +9,8 @@ defmodule LiteskillWeb.Plugs.Auth do
   alias Liteskill.Accounts
   alias Liteskill.SingleUser
 
+  @touch_throttle_seconds 60
+
   def init(action), do: action
 
   def call(conn, :fetch_current_user), do: fetch_current_user(conn)
@@ -18,14 +20,20 @@ defmodule LiteskillWeb.Plugs.Auth do
     if SingleUser.enabled?() do
       assign(conn, :current_user, SingleUser.auto_user())
     else
-      case get_session(conn, :user_id) do
+      case get_session(conn, :session_token) do
         nil ->
           assign(conn, :current_user, nil)
 
-        user_id ->
-          case Accounts.get_user(user_id) do
-            nil -> assign(conn, :current_user, nil)
-            user -> assign(conn, :current_user, user)
+        token ->
+          case Accounts.validate_session_with_user(token) do
+            {session, user} ->
+              maybe_touch_session(session)
+              assign(conn, :current_user, user)
+
+            nil ->
+              conn
+              |> delete_session(:session_token)
+              |> assign(:current_user, nil)
           end
       end
     end
@@ -39,6 +47,15 @@ defmodule LiteskillWeb.Plugs.Auth do
       |> put_status(:unauthorized)
       |> json(%{error: "authentication required"})
       |> halt()
+    end
+  end
+
+  defp maybe_touch_session(%{last_active_at: last_active_at} = session) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    elapsed = DateTime.diff(now, last_active_at, :second)
+
+    if elapsed >= @touch_throttle_seconds do
+      Accounts.touch_session(session)
     end
   end
 end

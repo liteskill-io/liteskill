@@ -15,7 +15,7 @@ defmodule LiteskillWeb.OpenRouterControllerTest do
 
     conn =
       build_conn()
-      |> init_test_session(%{user_id: user.id})
+      |> init_authenticated_session(user)
 
     %{conn: conn, user: user}
   end
@@ -71,8 +71,7 @@ defmodule LiteskillWeb.OpenRouterControllerTest do
 
       conn =
         conn
-        |> init_test_session(%{
-          user_id: user.id,
+        |> init_authenticated_session(user, %{
           openrouter_code_verifier: verifier,
           openrouter_return_to: "/setup"
         })
@@ -107,8 +106,7 @@ defmodule LiteskillWeb.OpenRouterControllerTest do
 
       conn =
         conn
-        |> init_test_session(%{
-          user_id: user.id,
+        |> init_authenticated_session(user, %{
           openrouter_code_verifier: verifier,
           openrouter_return_to: "/admin/setup"
         })
@@ -129,8 +127,7 @@ defmodule LiteskillWeb.OpenRouterControllerTest do
 
       conn =
         conn
-        |> init_test_session(%{
-          user_id: user.id,
+        |> init_authenticated_session(user, %{
           openrouter_code_verifier: verifier,
           openrouter_return_to: "/setup"
         })
@@ -143,8 +140,7 @@ defmodule LiteskillWeb.OpenRouterControllerTest do
     test "handles callback without code param", %{conn: conn, user: user} do
       conn =
         conn
-        |> init_test_session(%{
-          user_id: user.id,
+        |> init_authenticated_session(user, %{
           openrouter_code_verifier: "some-verifier",
           openrouter_return_to: "/setup"
         })
@@ -157,7 +153,7 @@ defmodule LiteskillWeb.OpenRouterControllerTest do
     test "handles callback without session verifier", %{conn: conn, user: user} do
       conn =
         conn
-        |> init_test_session(%{user_id: user.id})
+        |> init_authenticated_session(user)
         |> get(~p"/auth/openrouter/callback?code=test_code")
 
       assert redirected_to(conn) == "/"
@@ -257,7 +253,7 @@ defmodule LiteskillWeb.OpenRouterControllerTest do
       # Request WITH a session — state-based flow should still render static HTML
       conn =
         conn
-        |> init_test_session(%{user_id: user.id})
+        |> init_authenticated_session(user)
         |> get(~p"/auth/openrouter/callback?code=test_code&state=#{state}")
 
       assert conn.status == 200
@@ -280,7 +276,7 @@ defmodule LiteskillWeb.OpenRouterControllerTest do
 
       conn =
         conn
-        |> init_test_session(%{user_id: user.id})
+        |> init_authenticated_session(user)
         |> get(~p"/auth/openrouter/callback?code=bad_code&state=#{state}")
 
       assert conn.status == 200
@@ -291,7 +287,7 @@ defmodule LiteskillWeb.OpenRouterControllerTest do
       # Invalid state token — should fall through to session-based flow
       conn =
         conn
-        |> init_test_session(%{user_id: user.id})
+        |> init_authenticated_session(user)
         |> get(~p"/auth/openrouter/callback?code=test_code&state=bogus")
 
       # No session verifier → error flash

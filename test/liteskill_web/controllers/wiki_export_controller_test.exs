@@ -15,7 +15,7 @@ defmodule LiteskillWeb.WikiExportControllerTest do
 
     conn =
       build_conn()
-      |> init_test_session(%{user_id: user.id})
+      |> init_authenticated_session(user)
 
     %{conn: conn, user: user}
   end

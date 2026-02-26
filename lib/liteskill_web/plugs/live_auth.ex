@@ -20,16 +20,16 @@ defmodule LiteskillWeb.Plugs.LiveAuth do
         {:cont, assign(socket, :current_user, SingleUser.auto_user())}
       end
     else
-      case session["user_id"] do
+      case session["session_token"] do
         nil ->
           {:halt, redirect(socket, to: "/login")}
 
-        user_id ->
-          case Accounts.get_user(user_id) do
+        token ->
+          case Accounts.validate_session_with_user(token) do
             nil ->
               {:halt, redirect(socket, to: "/login")}
 
-            user ->
+            {_session, user} ->
               if User.setup_required?(user) do
                 {:halt, redirect(socket, to: "/setup")}
               else
@@ -48,16 +48,16 @@ defmodule LiteskillWeb.Plugs.LiveAuth do
         {:cont, assign(socket, :current_user, SingleUser.auto_user())}
       end
     else
-      case session["user_id"] do
+      case session["session_token"] do
         nil ->
           {:halt, redirect(socket, to: "/login")}
 
-        user_id ->
-          case Accounts.get_user(user_id) do
+        token ->
+          case Accounts.validate_session_with_user(token) do
             nil ->
               {:halt, redirect(socket, to: "/login")}
 
-            user ->
+            {_session, user} ->
               if Liteskill.Rbac.has_any_admin_permission?(user.id) do
                 {:cont, assign(socket, :current_user, user)}
               else
@@ -100,16 +100,16 @@ defmodule LiteskillWeb.Plugs.LiveAuth do
       if admin && User.setup_required?(admin) do
         {:halt, redirect(socket, to: "/setup")}
       else
-        case session["user_id"] do
+        case session["session_token"] do
           nil ->
             {:cont, assign(socket, :current_user, nil)}
 
-          user_id ->
-            case Accounts.get_user(user_id) do
+          token ->
+            case Accounts.validate_session_with_user(token) do
               nil ->
                 {:cont, assign(socket, :current_user, nil)}
 
-              _user ->
+              {_session, _user} ->
                 {:halt, redirect(socket, to: "/")}
             end
         end

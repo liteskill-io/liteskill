@@ -69,6 +69,10 @@ config :ueberauth, Ueberauth,
 # Single-user mode (desktop / self-hosted). Set SINGLE_USER_MODE=true to enable.
 config :liteskill, :single_user_mode, false
 
+# Server-side session expiration (seconds). Override via env vars in runtime.exs.
+config :liteskill, :session_max_age_seconds, 86_400
+config :liteskill, :session_idle_timeout_seconds, 86_400
+
 # Configure LLM defaults (region/token used by CohereClient for RAG embeddings)
 config :liteskill, Liteskill.LLM, bedrock_region: "us-east-1"
 

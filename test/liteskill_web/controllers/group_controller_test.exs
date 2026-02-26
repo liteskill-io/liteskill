@@ -22,7 +22,7 @@ defmodule LiteskillWeb.GroupControllerTest do
 
     conn =
       build_conn()
-      |> init_test_session(%{user_id: user.id})
+      |> init_authenticated_session(user)
       |> put_req_header("accept", "application/json")
 
     %{conn: conn, user: user, other_user: other_user}
@@ -63,7 +63,7 @@ defmodule LiteskillWeb.GroupControllerTest do
 
       conn =
         build_conn()
-        |> init_test_session(%{user_id: other.id})
+        |> init_authenticated_session(other)
         |> put_req_header("accept", "application/json")
         |> get(~p"/api/groups/#{group.id}")
 
@@ -85,7 +85,7 @@ defmodule LiteskillWeb.GroupControllerTest do
 
       conn =
         build_conn()
-        |> init_test_session(%{user_id: other.id})
+        |> init_authenticated_session(other)
         |> put_req_header("accept", "application/json")
         |> delete(~p"/api/groups/#{group.id}")
 
@@ -111,7 +111,7 @@ defmodule LiteskillWeb.GroupControllerTest do
 
       conn =
         build_conn()
-        |> init_test_session(%{user_id: other.id})
+        |> init_authenticated_session(other)
         |> put_req_header("accept", "application/json")
         |> post(~p"/api/groups/#{group.id}/members", %{user_id: user.id})
 

@@ -2,10 +2,12 @@ defmodule Liteskill.Accounts do
   @moduledoc """
   The Accounts context. Manages user records created from OIDC or password authentication.
   """
-  use Boundary, top_level?: true, deps: [], exports: [User, Invitation]
+  use Boundary, top_level?: true, deps: [], exports: [User, Invitation, UserSession, AuthEvent]
 
+  alias Liteskill.Accounts.AuthEvent
   alias Liteskill.Accounts.Invitation
   alias Liteskill.Accounts.User
+  alias Liteskill.Accounts.UserSession
   alias Liteskill.Repo
 
   import Ecto.Query
@@ -288,5 +290,144 @@ defmodule Liteskill.Accounts do
           Repo.delete(invitation)
         end
     end
+  end
+
+  # --- Server-side Sessions ---
+
+  @doc """
+  Creates a new server-side session for the given user.
+  `conn_info` should be a map with optional `:ip_address` and `:user_agent` keys.
+  """
+  def create_session(user_id, conn_info \\ %{}) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    %UserSession{
+      user_id: user_id,
+      ip_address: conn_info[:ip_address],
+      user_agent: conn_info[:user_agent],
+      last_active_at: now,
+      expires_at: DateTime.add(now, session_max_age(), :second)
+    }
+    |> Repo.insert()
+  end
+
+  @doc """
+  Validates a session token. Returns the session if valid and not expired/idle, nil otherwise.
+  """
+  def validate_session(token) when is_binary(token) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    idle_cutoff = DateTime.add(now, -session_idle_timeout(), :second)
+
+    Repo.one(
+      from s in UserSession,
+        where: s.id == ^token,
+        where: s.expires_at > ^now,
+        where: s.last_active_at > ^idle_cutoff
+    )
+  end
+
+  def validate_session(_), do: nil
+
+  @doc """
+  Validates a session token and returns `{session, user}` via a single JOIN query.
+  Returns `nil` if the session is invalid, expired, or idle-timed-out.
+  """
+  def validate_session_with_user(token) when is_binary(token) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    idle_cutoff = DateTime.add(now, -session_idle_timeout(), :second)
+
+    Repo.one(
+      from s in UserSession,
+        join: u in User,
+        on: u.id == s.user_id,
+        where: s.id == ^token,
+        where: s.expires_at > ^now,
+        where: s.last_active_at > ^idle_cutoff,
+        select: {s, u}
+    )
+  end
+
+  def validate_session_with_user(_), do: nil
+
+  @doc """
+  Updates `last_active_at` on a session. Throttled by the caller (skip if < 60s).
+  """
+  def touch_session(%UserSession{id: id}) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    from(s in UserSession, where: s.id == ^id)
+    |> Repo.update_all(set: [last_active_at: now])
+  end
+
+  @doc """
+  Deletes a single session by ID.
+  """
+  def delete_session(session_id) when is_binary(session_id) do
+    from(s in UserSession, where: s.id == ^session_id)
+    |> Repo.delete_all()
+  end
+
+  @doc """
+  Deletes all sessions for a given user.
+  """
+  def delete_user_sessions(user_id) when is_binary(user_id) do
+    from(s in UserSession, where: s.user_id == ^user_id)
+    |> Repo.delete_all()
+  end
+
+  @doc """
+  Deletes all expired sessions (absolute expiration or idle timeout).
+  Called by SessionSweeper.
+  """
+  def delete_expired_sessions do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    idle_cutoff = DateTime.add(now, -session_idle_timeout(), :second)
+
+    from(s in UserSession,
+      where: s.expires_at <= ^now or s.last_active_at <= ^idle_cutoff
+    )
+    |> Repo.delete_all()
+  end
+
+  # --- Auth Events ---
+
+  @doc """
+  Logs an authentication event. Accepts a map with required `:event_type`
+  and optional `:user_id`, `:ip_address`, `:user_agent`, `:metadata`.
+  """
+  def log_auth_event(attrs) when is_map(attrs) do
+    %AuthEvent{
+      user_id: attrs[:user_id],
+      event_type: attrs.event_type,
+      ip_address: attrs[:ip_address],
+      user_agent: attrs[:user_agent],
+      metadata: attrs[:metadata] || %{}
+    }
+    |> Repo.insert()
+  end
+
+  @doc """
+  Lists auth events for a user, ordered by most recent first.
+  Accepts optional `:limit` (default 50).
+  """
+  def list_auth_events(user_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+
+    from(e in AuthEvent,
+      where: e.user_id == ^user_id,
+      order_by: [desc: e.inserted_at],
+      limit: ^limit
+    )
+    |> Repo.all()
+  end
+
+  # --- Session config helpers ---
+
+  defp session_max_age do
+    Application.get_env(:liteskill, :session_max_age_seconds, 86_400)
+  end
+
+  defp session_idle_timeout do
+    Application.get_env(:liteskill, :session_idle_timeout_seconds, 86_400)
   end
 end

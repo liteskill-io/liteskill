@@ -20,7 +20,7 @@ defmodule LiteskillWeb.ConversationControllerTest do
 
     conn =
       build_conn()
-      |> init_test_session(%{user_id: user.id})
+      |> init_authenticated_session(user)
       |> put_req_header("accept", "application/json")
 
     %{conn: conn, user: user, other_user: other_user}
@@ -106,7 +106,7 @@ defmodule LiteskillWeb.ConversationControllerTest do
 
       conn =
         build_conn()
-        |> init_test_session(%{user_id: other.id})
+        |> init_authenticated_session(other)
         |> put_req_header("accept", "application/json")
         |> get(~p"/api/conversations/#{conv.id}")
 
@@ -175,7 +175,7 @@ defmodule LiteskillWeb.ConversationControllerTest do
 
       conn =
         build_conn()
-        |> init_test_session(%{user_id: other.id})
+        |> init_authenticated_session(other)
         |> put_req_header("accept", "application/json")
         |> post(~p"/api/conversations/#{conv.id}/acls", %{user_id: user.id})
 
@@ -207,7 +207,7 @@ defmodule LiteskillWeb.ConversationControllerTest do
 
       conn =
         build_conn()
-        |> init_test_session(%{user_id: other.id})
+        |> init_authenticated_session(other)
         |> put_req_header("accept", "application/json")
         |> delete(~p"/api/conversations/#{conv.id}/membership")
 

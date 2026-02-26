@@ -66,6 +66,15 @@ if System.get_env("SINGLE_USER_MODE") in ~w(true 1 yes) do
   config :liteskill, :single_user_mode, true
 end
 
+# Server-side session timeouts (seconds)
+if max_age = System.get_env("SESSION_MAX_AGE_SECONDS") do
+  config :liteskill, :session_max_age_seconds, String.to_integer(max_age)
+end
+
+if idle_timeout = System.get_env("SESSION_IDLE_TIMEOUT_SECONDS") do
+  config :liteskill, :session_idle_timeout_seconds, String.to_integer(idle_timeout)
+end
+
 # Encryption key for sensitive fields (MCP API keys, etc.)
 if encryption_key = System.get_env("ENCRYPTION_KEY") do
   config :liteskill, :encryption_key, encryption_key
