@@ -312,23 +312,6 @@ defmodule Liteskill.Accounts do
   end
 
   @doc """
-  Validates a session token. Returns the session if valid and not expired/idle, nil otherwise.
-  """
-  def validate_session(token) when is_binary(token) do
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
-    idle_cutoff = DateTime.add(now, -session_idle_timeout(), :second)
-
-    Repo.one(
-      from s in UserSession,
-        where: s.id == ^token,
-        where: s.expires_at > ^now,
-        where: s.last_active_at > ^idle_cutoff
-    )
-  end
-
-  def validate_session(_), do: nil
-
-  @doc """
   Validates a session token and returns `{session, user}` via a single JOIN query.
   Returns `nil` if the session is invalid, expired, or idle-timed-out.
   """
@@ -368,6 +351,18 @@ defmodule Liteskill.Accounts do
   end
 
   @doc """
+  Atomically deletes a session and returns it. Used by logout to avoid
+  TOCTOU race between validate and delete.
+  Returns `{:ok, session}` if found and deleted, `:error` otherwise.
+  """
+  def delete_and_return_session(session_id) when is_binary(session_id) do
+    case Repo.delete_all(from(s in UserSession, where: s.id == ^session_id, select: s)) do
+      {1, [session]} -> {:ok, session}
+      _ -> :error
+    end
+  end
+
+  @doc """
   Deletes all sessions for a given user.
   """
   def delete_user_sessions(user_id) when is_binary(user_id) do
@@ -395,10 +390,10 @@ defmodule Liteskill.Accounts do
   Logs an authentication event. Accepts a map with required `:event_type`
   and optional `:user_id`, `:ip_address`, `:user_agent`, `:metadata`.
   """
-  def log_auth_event(attrs) when is_map(attrs) do
+  def log_auth_event(%{event_type: event_type} = attrs) do
     %AuthEvent{
       user_id: attrs[:user_id],
-      event_type: attrs.event_type,
+      event_type: event_type,
       ip_address: attrs[:ip_address],
       user_agent: attrs[:user_agent],
       metadata: attrs[:metadata] || %{}

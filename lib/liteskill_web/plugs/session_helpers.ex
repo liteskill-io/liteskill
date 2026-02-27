@@ -6,6 +6,16 @@ defmodule LiteskillWeb.Plugs.SessionHelpers do
   @max_user_agent_length 512
 
   @doc """
+  Extracts `%{ip_address: ..., user_agent: ...}` from the connection.
+  """
+  def conn_info(conn) do
+    %{
+      ip_address: client_ip(conn),
+      user_agent: client_user_agent(conn)
+    }
+  end
+
+  @doc """
   Extracts the client IP address from x-forwarded-for header or remote_ip.
   """
   def client_ip(conn) do

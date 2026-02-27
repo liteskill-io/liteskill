@@ -16,17 +16,15 @@ defmodule LiteskillWeb.AuthController do
       oidc_claims: auth.extra.raw_info.userinfo || %{}
     }
 
-    conn_info = %{
-      ip_address: SessionHelpers.client_ip(conn),
-      user_agent: SessionHelpers.client_user_agent(conn)
-    }
+    conn_info = SessionHelpers.conn_info(conn)
 
     case Accounts.find_or_create_from_oidc(user_attrs) do
       {:ok, user} ->
         {:ok, session} = Accounts.create_session(user.id, conn_info)
+        new_registration? = recently_created?(user)
 
         Accounts.log_auth_event(%{
-          event_type: "login_success",
+          event_type: if(new_registration?, do: "registration_success", else: "login_success"),
           user_id: user.id,
           ip_address: conn_info.ip_address,
           user_agent: conn_info.user_agent,
@@ -45,10 +43,7 @@ defmodule LiteskillWeb.AuthController do
   end
 
   def callback(%{assigns: %{ueberauth_failure: _failure}} = conn, _params) do
-    conn_info = %{
-      ip_address: SessionHelpers.client_ip(conn),
-      user_agent: SessionHelpers.client_user_agent(conn)
-    }
+    conn_info = SessionHelpers.conn_info(conn)
 
     Accounts.log_auth_event(%{
       event_type: "login_failure",
@@ -64,31 +59,30 @@ defmodule LiteskillWeb.AuthController do
 
   def logout(conn, _params) do
     session_token = get_session(conn, :session_token)
-
-    conn_info = %{
-      ip_address: SessionHelpers.client_ip(conn),
-      user_agent: SessionHelpers.client_user_agent(conn)
-    }
+    conn_info = SessionHelpers.conn_info(conn)
 
     if session_token do
-      case Accounts.validate_session(session_token) do
-        %{user_id: user_id} ->
+      case Accounts.delete_and_return_session(session_token) do
+        {:ok, session} ->
           Accounts.log_auth_event(%{
             event_type: "logout",
-            user_id: user_id,
+            user_id: session.user_id,
             ip_address: conn_info.ip_address,
             user_agent: conn_info.user_agent
           })
 
-        _ ->
+        :error ->
           :ok
       end
-
-      Accounts.delete_session(session_token)
     end
 
     conn
     |> configure_session(drop: true)
     |> json(%{ok: true})
+  end
+
+  # A user created within the last 5 seconds during an OIDC callback is a new registration.
+  defp recently_created?(%{inserted_at: inserted_at}) do
+    DateTime.diff(DateTime.utc_now(), inserted_at, :second) < 5
   end
 end

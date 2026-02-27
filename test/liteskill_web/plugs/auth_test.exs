@@ -62,6 +62,39 @@ defmodule LiteskillWeb.Plugs.AuthTest do
       assert conn.assigns.current_user.id == user.id
     end
 
+    test "touches session when last_active_at is stale", %{conn: conn} do
+      {:ok, user} =
+        Liteskill.Accounts.find_or_create_from_oidc(%{
+          email: "plug-touch-#{System.unique_integer([:positive])}@example.com",
+          name: "Plug Touch Test",
+          oidc_sub: "plug-touch-#{System.unique_integer([:positive])}",
+          oidc_issuer: "https://test.example.com"
+        })
+
+      {:ok, session} = Liteskill.Accounts.create_session(user.id)
+
+      # Set last_active_at to 120 seconds ago to trigger touch
+      past = DateTime.add(DateTime.utc_now(), -120, :second) |> DateTime.truncate(:second)
+
+      import Ecto.Query
+
+      Liteskill.Repo.update_all(
+        from(s in Liteskill.Accounts.UserSession, where: s.id == ^session.id),
+        set: [last_active_at: past]
+      )
+
+      conn =
+        conn
+        |> init_test_session(%{session_token: session.id})
+        |> Auth.fetch_current_user()
+
+      assert conn.assigns.current_user.id == user.id
+
+      # Verify session was touched
+      {updated_session, _user} = Liteskill.Accounts.validate_session_with_user(session.id)
+      assert DateTime.compare(updated_session.last_active_at, past) == :gt
+    end
+
     test "assigns nil when session_token not found in database", %{conn: conn} do
       conn =
         conn

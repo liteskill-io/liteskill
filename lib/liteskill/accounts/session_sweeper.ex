@@ -6,32 +6,32 @@ defmodule Liteskill.Accounts.SessionSweeper do
 
   use GenServer
 
-  # coveralls-ignore-start
-
   @sweep_interval_ms 300_000
 
   def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+    name = Keyword.get(opts, :name, __MODULE__)
+    GenServer.start_link(__MODULE__, opts, name: name)
   end
 
   @impl true
-  def init(_opts) do
-    schedule_sweep()
-    {:ok, %{}}
+  def init(opts) do
+    interval = Keyword.get(opts, :interval_ms, @sweep_interval_ms)
+    schedule_sweep(interval)
+    {:ok, %{interval: interval}}
   end
 
   @impl true
   def handle_info(:sweep, state) do
     Liteskill.Accounts.delete_expired_sessions()
-    schedule_sweep()
+    schedule_sweep(state.interval)
     {:noreply, state}
   end
 
+  # coveralls-ignore-start
   def handle_info(_msg, state), do: {:noreply, state}
-
-  defp schedule_sweep do
-    Process.send_after(self(), :sweep, @sweep_interval_ms)
-  end
-
   # coveralls-ignore-stop
+
+  defp schedule_sweep(interval) do
+    Process.send_after(self(), :sweep, interval)
+  end
 end

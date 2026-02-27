@@ -42,54 +42,6 @@ defmodule Liteskill.Accounts.UserSessionTest do
     end
   end
 
-  describe "validate_session/1" do
-    test "returns session when valid" do
-      %{user: user} = create_user()
-      {:ok, session} = Accounts.create_session(user.id)
-
-      result = Accounts.validate_session(session.id)
-      assert result.id == session.id
-    end
-
-    test "returns nil for non-existent token" do
-      assert Accounts.validate_session(Ecto.UUID.generate()) == nil
-    end
-
-    test "returns nil for nil token" do
-      assert Accounts.validate_session(nil) == nil
-    end
-
-    test "returns nil for expired session" do
-      %{user: user} = create_user()
-      {:ok, session} = Accounts.create_session(user.id)
-
-      # Manually expire the session
-      past = DateTime.add(DateTime.utc_now(), -1, :second) |> DateTime.truncate(:second)
-
-      Liteskill.Repo.update_all(
-        from(s in Liteskill.Accounts.UserSession, where: s.id == ^session.id),
-        set: [expires_at: past]
-      )
-
-      assert Accounts.validate_session(session.id) == nil
-    end
-
-    test "returns nil for idle-timed-out session" do
-      %{user: user} = create_user()
-      {:ok, session} = Accounts.create_session(user.id)
-
-      # Set last_active_at far in the past
-      past = DateTime.add(DateTime.utc_now(), -200_000, :second) |> DateTime.truncate(:second)
-
-      Liteskill.Repo.update_all(
-        from(s in Liteskill.Accounts.UserSession, where: s.id == ^session.id),
-        set: [last_active_at: past]
-      )
-
-      assert Accounts.validate_session(session.id) == nil
-    end
-  end
-
   describe "validate_session_with_user/1" do
     test "returns {session, user} tuple when valid" do
       %{user: user} = create_user()
@@ -106,6 +58,34 @@ defmodule Liteskill.Accounts.UserSessionTest do
 
     test "returns nil for nil token" do
       assert Accounts.validate_session_with_user(nil) == nil
+    end
+
+    test "returns nil for expired session" do
+      %{user: user} = create_user()
+      {:ok, session} = Accounts.create_session(user.id)
+
+      past = DateTime.add(DateTime.utc_now(), -1, :second) |> DateTime.truncate(:second)
+
+      Liteskill.Repo.update_all(
+        from(s in Liteskill.Accounts.UserSession, where: s.id == ^session.id),
+        set: [expires_at: past]
+      )
+
+      assert Accounts.validate_session_with_user(session.id) == nil
+    end
+
+    test "returns nil for idle-timed-out session" do
+      %{user: user} = create_user()
+      {:ok, session} = Accounts.create_session(user.id)
+
+      past = DateTime.add(DateTime.utc_now(), -200_000, :second) |> DateTime.truncate(:second)
+
+      Liteskill.Repo.update_all(
+        from(s in Liteskill.Accounts.UserSession, where: s.id == ^session.id),
+        set: [last_active_at: past]
+      )
+
+      assert Accounts.validate_session_with_user(session.id) == nil
     end
   end
 
@@ -124,7 +104,7 @@ defmodule Liteskill.Accounts.UserSessionTest do
 
       Accounts.touch_session(session)
 
-      updated = Accounts.validate_session(session.id)
+      {updated, _user} = Accounts.validate_session_with_user(session.id)
       assert DateTime.compare(updated.last_active_at, past) == :gt
     end
   end
@@ -135,7 +115,23 @@ defmodule Liteskill.Accounts.UserSessionTest do
       {:ok, session} = Accounts.create_session(user.id)
 
       assert {1, _} = Accounts.delete_session(session.id)
-      assert Accounts.validate_session(session.id) == nil
+      assert Accounts.validate_session_with_user(session.id) == nil
+    end
+  end
+
+  describe "delete_and_return_session/1" do
+    test "atomically deletes and returns the session" do
+      %{user: user} = create_user()
+      {:ok, session} = Accounts.create_session(user.id)
+
+      assert {:ok, returned} = Accounts.delete_and_return_session(session.id)
+      assert returned.id == session.id
+      assert returned.user_id == user.id
+      assert Accounts.validate_session_with_user(session.id) == nil
+    end
+
+    test "returns :error for non-existent session" do
+      assert :error = Accounts.delete_and_return_session(Ecto.UUID.generate())
     end
   end
 
@@ -163,7 +159,7 @@ defmodule Liteskill.Accounts.UserSessionTest do
 
       {count, _} = Accounts.delete_expired_sessions()
       assert count >= 1
-      assert Accounts.validate_session(session.id) == nil
+      assert Accounts.validate_session_with_user(session.id) == nil
     end
 
     test "does not delete valid sessions" do
@@ -171,7 +167,7 @@ defmodule Liteskill.Accounts.UserSessionTest do
       {:ok, session} = Accounts.create_session(user.id)
 
       Accounts.delete_expired_sessions()
-      assert Accounts.validate_session(session.id) != nil
+      assert Accounts.validate_session_with_user(session.id) != nil
     end
   end
 end
