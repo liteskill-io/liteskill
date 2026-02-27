@@ -34,7 +34,7 @@ defmodule LiteskillWeb.Plugs.AuthTest do
   end
 
   describe "fetch_current_user/2" do
-    test "assigns nil when no user_id in session", %{conn: conn} do
+    test "assigns nil when no session_token in session", %{conn: conn} do
       conn =
         conn
         |> init_test_session(%{})
@@ -43,7 +43,7 @@ defmodule LiteskillWeb.Plugs.AuthTest do
       assert conn.assigns.current_user == nil
     end
 
-    test "assigns user when user_id is in session", %{conn: conn} do
+    test "assigns user when valid session_token is in session", %{conn: conn} do
       {:ok, user} =
         Liteskill.Accounts.find_or_create_from_oidc(%{
           email: "plug-test-#{System.unique_integer([:positive])}@example.com",
@@ -52,18 +52,20 @@ defmodule LiteskillWeb.Plugs.AuthTest do
           oidc_issuer: "https://test.example.com"
         })
 
+      {:ok, session} = Liteskill.Accounts.create_session(user.id)
+
       conn =
         conn
-        |> init_test_session(%{user_id: user.id})
+        |> init_test_session(%{session_token: session.id})
         |> Auth.fetch_current_user()
 
       assert conn.assigns.current_user.id == user.id
     end
 
-    test "assigns nil when user_id not found in database", %{conn: conn} do
+    test "assigns nil when session_token not found in database", %{conn: conn} do
       conn =
         conn
-        |> init_test_session(%{user_id: Ecto.UUID.generate()})
+        |> init_test_session(%{session_token: Ecto.UUID.generate()})
         |> Auth.fetch_current_user()
 
       assert conn.assigns.current_user == nil

@@ -42,6 +42,8 @@ defmodule Liteskill.Application do
         Liteskill.OpenRouter.StateStore,
         # Periodic sweep of stale rate limiter ETS buckets
         LiteskillWeb.Plugs.RateLimiter.Sweeper,
+        # Periodic sweep of expired server-side sessions
+        Liteskill.Accounts.SessionSweeper,
         # Task supervisor for LLM streaming and other async work
         {Task.Supervisor, name: Liteskill.TaskSupervisor},
         # Stream registry — monitors active LLM stream tasks, triggers recovery on crash
