@@ -47,7 +47,9 @@ defmodule Liteskill.Schedules.ScheduleTick do
       |> Oban.insert()
     end)
   rescue
+    # coveralls-ignore-start — defensive: only reached on transient DB errors
     e in [Postgrex.Error, DBConnection.ConnectionError, Ecto.QueryError] ->
       Logger.error("ScheduleTick error: #{Exception.message(e)}")
+      # coveralls-ignore-stop
   end
 end

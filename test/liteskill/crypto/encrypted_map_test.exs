@@ -48,6 +48,11 @@ defmodule Liteskill.Crypto.EncryptedMapTest do
     test "rejects non-map values" do
       assert :error = EncryptedMap.dump("string")
     end
+
+    test "returns error when map cannot be JSON-encoded" do
+      # A map with non-serializable values (PID) cannot be JSON encoded
+      assert :error = EncryptedMap.dump(%{"pid" => self()})
+    end
   end
 
   describe "load/1" do
@@ -67,6 +72,13 @@ defmodule Liteskill.Crypto.EncryptedMapTest do
 
     test "returns error for non-binary values" do
       assert :error = EncryptedMap.load(42)
+    end
+
+    test "returns error when decrypted JSON is not a map" do
+      # Encrypt a JSON list instead of a map
+      json = Jason.encode!([1, 2, 3])
+      encrypted = Liteskill.Crypto.encrypt(json)
+      assert :error = EncryptedMap.load(encrypted)
     end
   end
 

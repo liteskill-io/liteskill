@@ -241,6 +241,25 @@ defmodule LiteskillWeb.MarkdownTest do
       refute html =~ ~s(phx-hook="JsonRender")
     end
 
+    test "leaves json block with invalid JSON as-is (validate: true path)" do
+      md = """
+      ```json
+      {this is not valid json at all
+      ```
+      """
+
+      {:safe, html} = Markdown.render(md)
+      refute html =~ ~s(phx-hook="JsonRender")
+    end
+
+    test "json_render_spec? returns false for JSON with only root key (no elements/type)" do
+      # JSON that decodes fine but isn't a json-render spec
+      json = ~S|{"root": "something"}|
+      md = "```json\n#{json}\n```"
+      {:safe, html} = Markdown.render(md)
+      refute html =~ ~s(phx-hook="JsonRender")
+    end
+
     test "properly escapes special characters in data-spec" do
       json =
         ~S|{"root":{"type":"Alert","props":{"message":"A & B","severity":"info"},"children":[]}}|
@@ -329,6 +348,17 @@ defmodule LiteskillWeb.MarkdownTest do
       refute html =~ ~s(phx-hook="JsonRender")
     end
 
+    test "single bare JSONL line is left as-is (not enough for block)" do
+      # A single patch line on its own line followed by non-patch text
+      md = "Before\n\n" <> ~S|{"op":"add","path":"/root","value":"x"}| <> "\n\nAfter"
+      {:safe, html} = Markdown.render(md)
+
+      # Single line shouldn't trigger block extraction
+      refute html =~ ~s(phx-hook="JsonRender")
+      assert html =~ "Before"
+      assert html =~ "After"
+    end
+
     test "does not interfere with regular JSON objects" do
       md = """
       {"name": "Alice"}
@@ -350,6 +380,29 @@ defmodule LiteskillWeb.MarkdownTest do
 
       assert html =~ ~s(phx-hook="JsonRender")
       assert html =~ ~s(data-format="jsonl")
+    end
+  end
+
+  describe "citation replacement" do
+    test "replaces UUID citation markers with buttons" do
+      uuid = "12345678-1234-1234-1234-123456789012"
+      md = "See [uuid:#{uuid}] for details."
+      {:safe, html} = Markdown.render(md)
+
+      assert html =~ "rag-cite"
+      assert html =~ "phx-click=\"show_source\""
+      assert html =~ uuid
+      assert html =~ ">1</button>"
+    end
+
+    test "replaces multiple UUID citations with incrementing numbers" do
+      uuid1 = "12345678-1234-1234-1234-123456789012"
+      uuid2 = "abcdefab-cdef-abcd-efab-cdefabcdefab"
+      md = "First [uuid:#{uuid1}] and second [uuid:#{uuid2}]."
+      {:safe, html} = Markdown.render(md)
+
+      assert html =~ ">1</button>"
+      assert html =~ ">2</button>"
     end
   end
 
@@ -488,6 +541,28 @@ defmodule LiteskillWeb.MarkdownTest do
 
       refute result =~ ~s(phx-hook="JsonRender")
       assert result =~ "language-spec"
+    end
+
+    test "replaces bare placeholder not wrapped in <p> tags" do
+      id = :erlang.unique_integer([:positive])
+      json = ~S|{"root":{"type":"Card","props":{"title":"X"},"children":[]}}|
+
+      # Bare placeholder without <p> wrapping
+      html = "<div>JRBLOCK#{id}JREND</div>"
+      result = Markdown.restore_visual_blocks(html, %{id => {:json, json}})
+
+      assert result =~ ~s(phx-hook="JsonRender")
+    end
+
+    test "replaces JSONL placeholder with mixed valid/invalid lines" do
+      id = :erlang.unique_integer([:positive])
+      jsonl = ~S|{"op":"add","path":"/root","value":"a"}| <> "\ninvalid line\n"
+
+      html = "<p>JRBLOCK#{id}JREND</p>"
+      result = Markdown.restore_visual_blocks(html, %{id => {:jsonl, jsonl}})
+
+      # Has at least one valid line, so produces a hook div
+      assert result =~ ~s(phx-hook="JsonRender")
     end
   end
 end

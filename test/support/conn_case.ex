@@ -27,6 +27,7 @@ defmodule LiteskillWeb.ConnCase do
       # Import conveniences for testing with connections
       import Plug.Conn
       import Phoenix.ConnTest
+      import Phoenix.LiveViewTest
       import LiteskillWeb.ConnCase
     end
   end
@@ -42,6 +43,14 @@ defmodule LiteskillWeb.ConnCase do
 
     conn
     |> Plug.Test.init_test_session(session_data)
+  end
+
+  @doc """
+  Convenience wrapper: builds a conn with an authenticated session for the given user.
+  Works with both controller tests and `Phoenix.LiveViewTest.live/2`.
+  """
+  def log_in_user(conn, user) do
+    init_authenticated_session(conn, user)
   end
 
   setup tags do
