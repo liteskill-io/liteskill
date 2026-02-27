@@ -21,6 +21,10 @@ defmodule LiteskillWeb.Router do
     plug LiteskillWeb.Plugs.Auth, :require_authenticated_user
   end
 
+  pipeline :auth_rate_limit do
+    plug LiteskillWeb.Plugs.RateLimiter, limit: 60, window_ms: 60_000
+  end
+
   # Session bridge for LiveView auth
   scope "/auth", LiteskillWeb do
     pipe_through [:browser]
@@ -129,9 +133,9 @@ defmodule LiteskillWeb.Router do
     end
   end
 
-  # Password auth API routes (no auth required)
+  # Password auth API routes (no auth required, strict rate limit)
   scope "/auth", LiteskillWeb do
-    pipe_through [:api]
+    pipe_through [:api, :auth_rate_limit]
 
     post "/register", PasswordAuthController, :register
     post "/login", PasswordAuthController, :login

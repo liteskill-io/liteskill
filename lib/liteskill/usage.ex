@@ -20,6 +20,38 @@ defmodule Liteskill.Usage do
 
   require Logger
 
+  # Shared select expressions to avoid duplication across query functions.
+
+  defmacrop usage_select_full(query) do
+    quote do
+      select(unquote(query), [r], %{
+        input_tokens: coalesce(sum(r.input_tokens), 0),
+        output_tokens: coalesce(sum(r.output_tokens), 0),
+        total_tokens: coalesce(sum(r.total_tokens), 0),
+        reasoning_tokens: coalesce(sum(r.reasoning_tokens), 0),
+        cached_tokens: coalesce(sum(r.cached_tokens), 0),
+        input_cost: sum(r.input_cost),
+        output_cost: sum(r.output_cost),
+        total_cost: sum(r.total_cost),
+        call_count: count(r.id)
+      })
+    end
+  end
+
+  defmacrop usage_select_compact(query) do
+    quote do
+      select(unquote(query), [r], %{
+        input_tokens: coalesce(sum(r.input_tokens), 0),
+        output_tokens: coalesce(sum(r.output_tokens), 0),
+        total_tokens: coalesce(sum(r.total_tokens), 0),
+        input_cost: sum(r.input_cost),
+        output_cost: sum(r.output_cost),
+        total_cost: sum(r.total_cost),
+        call_count: count(r.id)
+      })
+    end
+  end
+
   @doc """
   Records a single LLM API call's usage.
 
@@ -119,17 +151,7 @@ defmodule Liteskill.Usage do
   def usage_by_conversation(conversation_id) do
     UsageRecord
     |> where([r], r.conversation_id == ^conversation_id)
-    |> select([r], %{
-      input_tokens: coalesce(sum(r.input_tokens), 0),
-      output_tokens: coalesce(sum(r.output_tokens), 0),
-      total_tokens: coalesce(sum(r.total_tokens), 0),
-      reasoning_tokens: coalesce(sum(r.reasoning_tokens), 0),
-      cached_tokens: coalesce(sum(r.cached_tokens), 0),
-      input_cost: sum(r.input_cost),
-      output_cost: sum(r.output_cost),
-      total_cost: sum(r.total_cost),
-      call_count: count(r.id)
-    })
+    |> usage_select_full()
     |> Repo.one()
   end
 
@@ -145,17 +167,7 @@ defmodule Liteskill.Usage do
     UsageRecord
     |> where([r], r.user_id == ^user_id)
     |> apply_time_filters(opts)
-    |> select([r], %{
-      input_tokens: coalesce(sum(r.input_tokens), 0),
-      output_tokens: coalesce(sum(r.output_tokens), 0),
-      total_tokens: coalesce(sum(r.total_tokens), 0),
-      reasoning_tokens: coalesce(sum(r.reasoning_tokens), 0),
-      cached_tokens: coalesce(sum(r.cached_tokens), 0),
-      input_cost: sum(r.input_cost),
-      output_cost: sum(r.output_cost),
-      total_cost: sum(r.total_cost),
-      call_count: count(r.id)
-    })
+    |> usage_select_full()
     |> Repo.one()
   end
 
@@ -172,16 +184,8 @@ defmodule Liteskill.Usage do
     |> where([r], r.user_id == ^user_id)
     |> apply_time_filters(opts)
     |> group_by([r], r.model_id)
-    |> select([r], %{
-      model_id: r.model_id,
-      input_tokens: coalesce(sum(r.input_tokens), 0),
-      output_tokens: coalesce(sum(r.output_tokens), 0),
-      total_tokens: coalesce(sum(r.total_tokens), 0),
-      input_cost: sum(r.input_cost),
-      output_cost: sum(r.output_cost),
-      total_cost: sum(r.total_cost),
-      call_count: count(r.id)
-    })
+    |> usage_select_compact()
+    |> select_merge([r], %{model_id: r.model_id})
     |> order_by([r], desc: coalesce(sum(r.total_tokens), 0))
     |> Repo.all()
   end
@@ -208,59 +212,27 @@ defmodule Liteskill.Usage do
       :model_id ->
         query
         |> group_by([r], r.model_id)
-        |> select([r], %{
-          model_id: r.model_id,
-          input_tokens: coalesce(sum(r.input_tokens), 0),
-          output_tokens: coalesce(sum(r.output_tokens), 0),
-          total_tokens: coalesce(sum(r.total_tokens), 0),
-          input_cost: sum(r.input_cost),
-          output_cost: sum(r.output_cost),
-          total_cost: sum(r.total_cost),
-          call_count: count(r.id)
-        })
+        |> usage_select_compact()
+        |> select_merge([r], %{model_id: r.model_id})
         |> Repo.all()
 
       :user_id ->
         query
         |> group_by([r], r.user_id)
-        |> select([r], %{
-          user_id: r.user_id,
-          input_tokens: coalesce(sum(r.input_tokens), 0),
-          output_tokens: coalesce(sum(r.output_tokens), 0),
-          total_tokens: coalesce(sum(r.total_tokens), 0),
-          input_cost: sum(r.input_cost),
-          output_cost: sum(r.output_cost),
-          total_cost: sum(r.total_cost),
-          call_count: count(r.id)
-        })
+        |> usage_select_compact()
+        |> select_merge([r], %{user_id: r.user_id})
         |> Repo.all()
 
       :conversation_id ->
         query
         |> group_by([r], r.conversation_id)
-        |> select([r], %{
-          conversation_id: r.conversation_id,
-          input_tokens: coalesce(sum(r.input_tokens), 0),
-          output_tokens: coalesce(sum(r.output_tokens), 0),
-          total_tokens: coalesce(sum(r.total_tokens), 0),
-          input_cost: sum(r.input_cost),
-          output_cost: sum(r.output_cost),
-          total_cost: sum(r.total_cost),
-          call_count: count(r.id)
-        })
+        |> usage_select_compact()
+        |> select_merge([r], %{conversation_id: r.conversation_id})
         |> Repo.all()
 
       nil ->
         query
-        |> select([r], %{
-          input_tokens: coalesce(sum(r.input_tokens), 0),
-          output_tokens: coalesce(sum(r.output_tokens), 0),
-          total_tokens: coalesce(sum(r.total_tokens), 0),
-          input_cost: sum(r.input_cost),
-          output_cost: sum(r.output_cost),
-          total_cost: sum(r.total_cost),
-          call_count: count(r.id)
-        })
+        |> usage_select_compact()
         |> Repo.one()
     end
   end
@@ -283,17 +255,7 @@ defmodule Liteskill.Usage do
     UsageRecord
     |> where([r], r.user_id in subquery(member_subquery))
     |> apply_time_filters(opts)
-    |> select([r], %{
-      input_tokens: coalesce(sum(r.input_tokens), 0),
-      output_tokens: coalesce(sum(r.output_tokens), 0),
-      total_tokens: coalesce(sum(r.total_tokens), 0),
-      reasoning_tokens: coalesce(sum(r.reasoning_tokens), 0),
-      cached_tokens: coalesce(sum(r.cached_tokens), 0),
-      input_cost: sum(r.input_cost),
-      output_cost: sum(r.output_cost),
-      total_cost: sum(r.total_cost),
-      call_count: count(r.id)
-    })
+    |> usage_select_full()
     |> Repo.one()
   end
 
@@ -319,18 +281,8 @@ defmodule Liteskill.Usage do
         )
         |> apply_time_filters(opts)
         |> group_by([r, gm], gm.group_id)
-        |> select([r, gm], %{
-          group_id: gm.group_id,
-          input_tokens: coalesce(sum(r.input_tokens), 0),
-          output_tokens: coalesce(sum(r.output_tokens), 0),
-          total_tokens: coalesce(sum(r.total_tokens), 0),
-          reasoning_tokens: coalesce(sum(r.reasoning_tokens), 0),
-          cached_tokens: coalesce(sum(r.cached_tokens), 0),
-          input_cost: sum(r.input_cost),
-          output_cost: sum(r.output_cost),
-          total_cost: sum(r.total_cost),
-          call_count: count(r.id)
-        })
+        |> usage_select_full()
+        |> select_merge([r, gm], %{group_id: gm.group_id})
         |> Repo.all()
 
       result_map = Map.new(results, fn row -> {row.group_id, Map.delete(row, :group_id)} end)
@@ -357,17 +309,7 @@ defmodule Liteskill.Usage do
   def usage_by_run(run_id) do
     UsageRecord
     |> where([r], r.run_id == ^run_id)
-    |> select([r], %{
-      input_tokens: coalesce(sum(r.input_tokens), 0),
-      output_tokens: coalesce(sum(r.output_tokens), 0),
-      total_tokens: coalesce(sum(r.total_tokens), 0),
-      reasoning_tokens: coalesce(sum(r.reasoning_tokens), 0),
-      cached_tokens: coalesce(sum(r.cached_tokens), 0),
-      input_cost: sum(r.input_cost),
-      output_cost: sum(r.output_cost),
-      total_cost: sum(r.total_cost),
-      call_count: count(r.id)
-    })
+    |> usage_select_full()
     |> Repo.one()
   end
 
@@ -399,16 +341,8 @@ defmodule Liteskill.Usage do
     UsageRecord
     |> where([r], r.run_id == ^run_id)
     |> group_by([r], r.model_id)
-    |> select([r], %{
-      model_id: r.model_id,
-      input_tokens: coalesce(sum(r.input_tokens), 0),
-      output_tokens: coalesce(sum(r.output_tokens), 0),
-      total_tokens: coalesce(sum(r.total_tokens), 0),
-      input_cost: sum(r.input_cost),
-      output_cost: sum(r.output_cost),
-      total_cost: sum(r.total_cost),
-      call_count: count(r.id)
-    })
+    |> usage_select_compact()
+    |> select_merge([r], %{model_id: r.model_id})
     |> order_by([r], desc: coalesce(sum(r.total_tokens), 0))
     |> Repo.all()
   end
@@ -453,17 +387,7 @@ defmodule Liteskill.Usage do
   def instance_totals(opts \\ []) do
     UsageRecord
     |> apply_time_filters(opts)
-    |> select([r], %{
-      input_tokens: coalesce(sum(r.input_tokens), 0),
-      output_tokens: coalesce(sum(r.output_tokens), 0),
-      total_tokens: coalesce(sum(r.total_tokens), 0),
-      reasoning_tokens: coalesce(sum(r.reasoning_tokens), 0),
-      cached_tokens: coalesce(sum(r.cached_tokens), 0),
-      input_cost: sum(r.input_cost),
-      output_cost: sum(r.output_cost),
-      total_cost: sum(r.total_cost),
-      call_count: count(r.id)
-    })
+    |> usage_select_full()
     |> Repo.one()
   end
 

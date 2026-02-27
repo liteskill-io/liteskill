@@ -192,6 +192,11 @@ defmodule Liteskill.Chat do
     end
   end
 
+  # NOTE: This is two sequential aggregate commands (truncate + send). If the process
+  # crashes between them, the conversation is left truncated without a replacement
+  # message. This is acceptable: the user can re-send, and the event store preserves
+  # the truncation event for auditability. A combined command would require changing
+  # the aggregate protocol.
   def edit_message(conversation_id, user_id, message_id, new_content, opts \\ []) do
     with {:ok, _conversation} <- truncate_conversation(conversation_id, user_id, message_id) do
       send_message(conversation_id, user_id, new_content, opts)
@@ -447,6 +452,9 @@ defmodule Liteskill.Chat do
     end
   end
 
+  # Returns :not_found for both missing and unauthorized conversations intentionally.
+  # This prevents resource enumeration — callers cannot distinguish "does not exist"
+  # from "exists but you lack access".
   defp authorize_conversation(conversation_id, user_id) do
     case Repo.get(Conversation, conversation_id) do
       nil ->

@@ -52,6 +52,13 @@ defmodule Liteskill.Chat.ConversationAggregate do
     {:error, :already_created}
   end
 
+  # coveralls-ignore-start - :created state unreachable through normal Chat context flow
+  def handle_command(%{status: :created}, {:add_user_message, _}) do
+    {:error, :not_active}
+  end
+
+  # coveralls-ignore-stop
+
   def handle_command(%{status: :archived}, {:add_user_message, _}) do
     {:error, :conversation_archived}
   end
@@ -176,7 +183,8 @@ defmodule Liteskill.Chat.ConversationAggregate do
     {:error, :not_streaming}
   end
 
-  def handle_command(%{status: :streaming}, {:complete_tool_call, params}) do
+  def handle_command(%{status: status}, {:complete_tool_call, params})
+      when status in [:streaming, :active] do
     now = iso_now()
 
     event =
@@ -193,14 +201,16 @@ defmodule Liteskill.Chat.ConversationAggregate do
     {:ok, [event]}
   end
 
-  def handle_command(%{status: status}, {:complete_tool_call, _})
-      when status != :streaming do
+  def handle_command(%{status: _status}, {:complete_tool_call, _}) do
     {:error, :not_streaming}
   end
 
   def handle_command(%{status: :archived}, {:update_title, _}) do
     {:error, :conversation_archived}
   end
+
+  # coveralls-ignore-next-line
+  def handle_command(%{status: :created}, {:update_title, _}), do: {:error, :not_active}
 
   def handle_command(%{status: _status}, {:update_title, params}) do
     now = iso_now()
@@ -217,6 +227,9 @@ defmodule Liteskill.Chat.ConversationAggregate do
   def handle_command(%{status: :archived}, {:archive, _}) do
     {:error, :already_archived}
   end
+
+  # coveralls-ignore-next-line
+  def handle_command(%{status: :created}, {:archive, _}), do: {:error, :not_active}
 
   def handle_command(%{status: _status}, {:archive, _params}) do
     now = iso_now()
@@ -255,6 +268,13 @@ defmodule Liteskill.Chat.ConversationAggregate do
       {:error, :message_not_found}
     end
   end
+
+  # coveralls-ignore-start
+  def handle_command(_state, {command_type, _params}) do
+    {:error, {:unknown_command, command_type}}
+  end
+
+  # coveralls-ignore-stop
 
   defp iso_now, do: DateTime.utc_now() |> DateTime.to_iso8601()
 

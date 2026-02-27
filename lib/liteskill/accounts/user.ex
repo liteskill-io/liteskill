@@ -78,9 +78,6 @@ defmodule Liteskill.Accounts.User do
     false
   end
 
-  def admin?(%__MODULE__{role: "admin"}), do: true
-  def admin?(_), do: false
-
   def admin_email, do: @admin_email
 
   def accent_color(%__MODULE__{preferences: %{"accent_color" => color}}), do: color

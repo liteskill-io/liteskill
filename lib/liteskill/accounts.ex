@@ -269,10 +269,6 @@ defmodule Liteskill.Accounts do
           end
       end
     end)
-    |> case do
-      {:ok, user} -> {:ok, user}
-      {:error, reason} -> {:error, reason}
-    end
   end
 
   @doc """

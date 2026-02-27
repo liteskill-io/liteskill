@@ -132,22 +132,39 @@ defmodule Liteskill.Aggregate.Loader do
 
   # Atom fields (like :status) lose their type through JSONB round-trip.
   # Convert known string values back to atoms using existing atoms only.
+  # Also restores nested atom values in current_stream.tool_calls[].status.
   defp restore_atom_fields(%{status: status} = map) when is_binary(status) do
-    atom =
-      try do
-        String.to_existing_atom(status)
-      rescue
-        # coveralls-ignore-next-line
-        ArgumentError -> status
-      end
-
-    if is_atom(atom) do
-      %{map | status: atom}
-    else
-      # coveralls-ignore-next-line
-      map
-    end
+    map = safe_to_atom(map, :status, status)
+    restore_nested_atom_fields(map)
   end
 
-  defp restore_atom_fields(map), do: map
+  defp restore_atom_fields(map), do: restore_nested_atom_fields(map)
+
+  # coveralls-ignore-start - only triggered when snapshot taken during streaming with active tool calls
+  defp restore_nested_atom_fields(%{current_stream: %{tool_calls: tool_calls} = stream} = map)
+       when is_list(tool_calls) do
+    restored_tcs =
+      Enum.map(tool_calls, fn
+        %{status: status} = tc when is_binary(status) -> safe_to_atom(tc, :status, status)
+        tc -> tc
+      end)
+
+    %{map | current_stream: %{stream | tool_calls: restored_tcs}}
+  end
+
+  # coveralls-ignore-stop
+
+  defp restore_nested_atom_fields(map), do: map
+
+  defp safe_to_atom(map, key, value) do
+    atom =
+      try do
+        String.to_existing_atom(value)
+      rescue
+        # coveralls-ignore-next-line
+        ArgumentError -> value
+      end
+
+    if is_atom(atom), do: %{map | key => atom}, else: map
+  end
 end

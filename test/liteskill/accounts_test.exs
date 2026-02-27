@@ -311,16 +311,6 @@ defmodule Liteskill.AccountsTest do
     end
   end
 
-  describe "User.admin?/1" do
-    test "returns true for admin role" do
-      assert User.admin?(%User{role: "admin"})
-    end
-
-    test "returns false for user role" do
-      refute User.admin?(%User{role: "user"})
-    end
-  end
-
   describe "User.setup_required?/1" do
     test "returns true for admin with no password" do
       assert User.setup_required?(%User{email: "admin@liteskill.local", password_hash: nil})

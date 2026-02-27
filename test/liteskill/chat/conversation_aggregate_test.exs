@@ -327,11 +327,11 @@ defmodule Liteskill.Chat.ConversationAggregateTest do
                )
     end
 
-    test "cannot complete tool call in active state" do
+    test "can complete tool call in active state (manual confirm flow)" do
       state =
         apply_commands(ConversationAggregate.init(), [{:create_conversation, create_params()}])
 
-      assert {:error, :not_streaming} =
+      assert {:ok, [%{event_type: "ToolCallCompleted"}]} =
                ConversationAggregate.handle_command(
                  state,
                  {:complete_tool_call, %{message_id: "m1", tool_use_id: "t1", tool_name: "calc"}}
