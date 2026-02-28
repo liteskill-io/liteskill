@@ -17,6 +17,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
   attr :form, :map, required: true
   attr :editing, :any, default: nil
   attr :available_models, :list, default: []
+  attr :available_roles, :list, default: []
   attr :all_mcp_servers, :list, default: []
   attr :assigned_server_ids, :any, default: nil
   attr :sidebar_open, :boolean, default: true
@@ -43,7 +44,12 @@ defmodule LiteskillWeb.AgentStudioComponents do
     <div class="flex-1 overflow-y-auto p-6">
       <div class="max-w-3xl">
         <.form for={@form} phx-submit="save_agent" phx-change="validate_agent" class="space-y-6">
-          <.agent_form_fields form={@form} editing={@editing} available_models={@available_models} />
+          <.agent_form_fields
+            form={@form}
+            editing={@editing}
+            available_models={@available_models}
+            available_roles={@available_roles}
+          />
           <.agent_tools_section
             :if={@editing}
             all_mcp_servers={@all_mcp_servers}
@@ -264,6 +270,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
   attr :form, :map, required: true
   attr :editing, :any, default: nil
   attr :available_models, :list, default: []
+  attr :available_roles, :list, default: []
 
   def agent_form_fields(assigns) do
     ~H"""
@@ -289,7 +296,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
         >{@form[:description].value}</textarea>
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-3 gap-4">
         <div>
           <label class="label"><span class="label-text font-medium">Strategy</span></label>
           <input type="hidden" name={@form[:strategy].name} value={@form[:strategy].value} />
@@ -313,6 +320,20 @@ defmodule LiteskillWeb.AgentStudioComponents do
               selected={@form[:llm_model_id].value == model.id}
             >
               {model.name}
+            </option>
+          </select>
+        </div>
+
+        <div>
+          <label class="label"><span class="label-text font-medium">Role</span></label>
+          <select name={@form[:role_id].name} class="select select-bordered w-full">
+            <option value="">No role assigned</option>
+            <option
+              :for={role <- @available_roles}
+              value={role.id}
+              selected={@form[:role_id].value == role.id}
+            >
+              {role.name}
             </option>
           </select>
         </div>

@@ -74,7 +74,8 @@ defmodule LiteskillWeb.AgentStudioLive do
           "opinions" => [],
           "system_prompt" => "",
           "strategy" => "react",
-          "llm_model_id" => ""
+          "llm_model_id" => "",
+          "role_id" => ""
         },
         data
       ),
@@ -157,6 +158,7 @@ defmodule LiteskillWeb.AgentStudioLive do
     conversations = Chat.list_conversations(socket.assigns.current_user.id)
     user = socket.assigns.current_user
     available_llm_models = LlmModels.list_active_models(user.id, model_type: "inference")
+    available_roles = Liteskill.Rbac.list_roles()
 
     {:ok,
      socket
@@ -168,6 +170,7 @@ defmodule LiteskillWeb.AgentStudioLive do
        has_admin_access: Liteskill.Rbac.has_any_admin_permission?(user.id),
        single_user_mode: Liteskill.SingleUser.enabled?(),
        available_llm_models: available_llm_models,
+       available_roles: available_roles,
        # Sharing modal state
        show_sharing: false,
        sharing_entity_type: nil,
@@ -220,6 +223,7 @@ defmodule LiteskillWeb.AgentStudioLive do
             form={@agent_form}
             editing={@editing_agent}
             available_models={@available_llm_models}
+            available_roles={@available_roles}
             all_mcp_servers={assigns[:all_mcp_servers] || []}
             assigned_server_ids={assigns[:assigned_server_ids] || MapSet.new()}
             sidebar_open={@sidebar_open}
@@ -377,6 +381,12 @@ defmodule LiteskillWeb.AgentStudioLive do
         all_mcp_servers = McpServers.list_servers(user_id)
         assigned_server_ids = compute_assigned_server_ids(agent)
 
+        current_role_id =
+          case Liteskill.Rbac.list_agent_roles(agent.id) do
+            [role | _] -> role.id
+            [] -> ""
+          end
+
         socket
         |> reset_common()
         |> assign(
@@ -391,7 +401,8 @@ defmodule LiteskillWeb.AgentStudioLive do
               "opinions" => encode_opinions(agent.opinions),
               "system_prompt" => agent.system_prompt || "",
               "strategy" => agent.strategy,
-              "llm_model_id" => agent.llm_model_id || ""
+              "llm_model_id" => agent.llm_model_id || "",
+              "role_id" => current_role_id
             }),
           page_title: "Edit #{agent.name}"
         )
