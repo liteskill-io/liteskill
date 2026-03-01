@@ -3,7 +3,12 @@
 # embedding tests pass on CI where no real AWS env vars exist.
 System.put_env("AWS_BEARER_TOKEN_BEDROCK", "test-token-for-reqllm-validation")
 
-ExUnit.start(capture_log: true)
+case Application.ensure_all_started(:wallaby) do
+  {:ok, _} -> Application.put_env(:wallaby, :base_url, LiteskillWeb.Endpoint.url())
+  {:error, _} -> :ok
+end
+
+ExUnit.start(capture_log: true, exclude: [:e2e])
 
 # Suppress Postgrex disconnect errors that leak to stderr when tests kill
 # processes holding shared sandbox connections (e.g. Runner timeout tests).

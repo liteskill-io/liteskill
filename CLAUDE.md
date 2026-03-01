@@ -12,6 +12,7 @@ mix test test/path_test.exs  # Run a single test file
 mix test --failed            # Re-run previously failed tests
 mix ecto.reset               # Drop + create + migrate + seed
 mix phx.server               # Start dev server on localhost:4000
+mix test.e2e                 # Run Wallaby E2E browser tests (requires chromedriver)
 
 # Docker-based (no local Postgres needed)
 ./scripts/test-with-docker.sh test        # Run tests via Docker Postgres
@@ -69,6 +70,14 @@ Command → Aggregate → Event → EventStore (append) → PubSub broadcast →
 - **DataCase**: `use Liteskill.DataCase, async: false` (shared sandbox). **Unit tests** (aggregates, events, parsers): `use ExUnit.Case, async: true`.
 - **MCP Client testing**: `plug: {Req.Test, Liteskill.McpServers.Client}`
 - **Stateful stubs**: Use `Agent` for varying responses across retries. Set `backoff_ms: 1` for retry tests.
+
+## E2E Testing (Wallaby)
+
+- **Wallaby + ChromeDriver**: Browser-based E2E tests in `test/e2e/`. Requires Chrome + chromedriver installed.
+- **Excluded by default**: `mix test` skips E2E tests (`:e2e` tag excluded). Run via `mix test.e2e`.
+- **FeatureCase**: `use LiteskillWeb.FeatureCase, async: false` — sets up Ecto sandbox sharing, starts Wallaby session.
+- **Auth helpers**: `register_user/2`, `login_user/3`, `register_and_login/2` use real browser form interactions.
+- **Sandbox plug**: `Phoenix.Ecto.SQL.Sandbox` enabled in endpoint via `:sandbox` compile env (test only).
 
 ## Tooling
 

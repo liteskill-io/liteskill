@@ -18,7 +18,7 @@ defmodule Liteskill.MixProject do
       releases: releases(),
       dialyzer: [
         list_unused_filters: true,
-        plt_add_apps: [:ex_unit, :mix],
+        plt_add_apps: [:ex_unit, :mix, :wallaby],
         excluded_paths: ["test/support"]
       ],
       docs: docs()
@@ -133,7 +133,8 @@ defmodule Liteskill.MixProject do
       {:styler, "~> 1.2", only: [:dev, :test], runtime: false},
       {:tidewave, "~> 0.5", only: :dev},
       {:ex_tauri, git: "https://github.com/filipecabaco/ex_tauri.git", optional: true, runtime: false},
-      {:burrito, "~> 1.5", optional: true}
+      {:burrito, "~> 1.5", optional: true},
+      {:wallaby, "~> 0.30", runtime: false, only: :test}
     ]
   end
 
@@ -156,6 +157,7 @@ defmodule Liteskill.MixProject do
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+      "test.e2e": ["ecto.create --quiet", "ecto.migrate --quiet", "test --only e2e"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind liteskill", "esbuild liteskill"],
       "assets.deploy": [

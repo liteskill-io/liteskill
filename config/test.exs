@@ -16,9 +16,12 @@ config :liteskill, Liteskill.Rag.EmbedQueue,
 config :liteskill, LiteskillWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
   secret_key_base: "k7UgpXGIuGs58stVlRNPYmIA3Rq1+0geRNZ5XaiFSVCLqkZdWXbXcQhf71wg5U5U",
-  server: false
+  server: true
 
 config :liteskill, Oban, testing: :manual
+
+# Ecto sandbox for Wallaby browser tests
+config :liteskill, :sandbox, Ecto.Adapters.SQL.Sandbox
 
 # Disable persistent_term cache for Settings (incompatible with Ecto sandbox)
 config :liteskill, :settings_cache, false
@@ -42,3 +45,11 @@ config :phoenix_live_view,
 
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
+
+# Wallaby E2E browser testing
+config :wallaby,
+  driver: Wallaby.Chrome,
+  otp_app: :liteskill,
+  screenshot_on_failure: true,
+  screenshot_dir: "tmp/wallaby_screenshots",
+  js_errors: false

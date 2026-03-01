@@ -20,7 +20,9 @@ if System.get_env("PHX_SERVER") do
   config :liteskill, LiteskillWeb.Endpoint, server: true
 end
 
-config :liteskill, LiteskillWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+if config_env() != :test do
+  config :liteskill, LiteskillWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+end
 
 # OIDC configuration (all environments)
 if System.get_env("OIDC_CLIENT_ID") do
