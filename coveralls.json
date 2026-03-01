@@ -52,6 +52,7 @@
     "lib/liteskill_web/live/chat_live/edit_handler.ex",
     "lib/liteskill_web/live/settings_live.ex",
     "lib/liteskill/runs/runner.ex",
+    "lib/liteskill/demo_seeds.ex",
     "lib/liteskill_web/controllers/wiki_export_controller.ex",
     "lib/mix/tasks/",
     "test/support/",
