@@ -54,6 +54,10 @@
 - [API](web/api.md)
 - [Authentication](web/authentication.md)
 
+# Deployment
+
+- [Helm Chart](deployment/helm-chart.md)
+
 # Configuration
 
 - [Environment Variables](configuration/environment-variables.md)
