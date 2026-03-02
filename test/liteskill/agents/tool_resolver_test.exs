@@ -142,6 +142,10 @@ defmodule Liteskill.Agents.ToolResolverTest do
 
   describe "resolve/2 — MCP tools with unreachable server" do
     test "handles unreachable MCP server gracefully", %{owner: owner, agent: agent} do
+      Req.Test.stub(Liteskill.McpServers.Client, fn conn ->
+        Req.Test.transport_error(conn, :econnrefused)
+      end)
+
       {:ok, server} =
         Liteskill.McpServers.create_server(%{
           name: "Unreachable MCP #{System.unique_integer([:positive])}",

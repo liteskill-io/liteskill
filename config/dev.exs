@@ -5,7 +5,7 @@ config :liteskill, Liteskill.Repo,
   username: "liteskill",
   password: "liteskill",
   hostname: "localhost",
-  database: "liteskill_dev",
+  database: "liteskill",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10

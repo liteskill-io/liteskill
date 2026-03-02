@@ -127,7 +127,11 @@ defmodule Liteskill.McpServers.Client do
   end
 
   defp do_post(server, body, session_id, opts) do
-    req_opts = Keyword.take(opts, [:plug])
+    req_opts =
+      case Keyword.take(opts, [:plug]) do
+        [] -> test_plug_opts()
+        explicit -> explicit
+      end
 
     all_opts =
       [
@@ -219,5 +223,15 @@ defmodule Liteskill.McpServers.Client do
 
   defp has_control_chars?(str) do
     String.contains?(str, ["\r", "\n", "\0"])
+  end
+
+  defp test_plug_opts do
+    if Application.get_env(:liteskill, :env) == :test do
+      [plug: {Req.Test, __MODULE__}]
+    else
+      # coveralls-ignore-start
+      []
+      # coveralls-ignore-stop
+    end
   end
 end

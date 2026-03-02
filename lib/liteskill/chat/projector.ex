@@ -54,6 +54,7 @@ defmodule Liteskill.Chat.Projector do
   @impl true
   def handle_call({:project_events, stream_id, events}, _from, state) do
     do_project(stream_id, events)
+    broadcast_projected(stream_id, events)
     {:reply, :ok, state}
   end
 
@@ -82,6 +83,17 @@ defmodule Liteskill.Chat.Projector do
   # coveralls-ignore-stop
 
   def handle_info(_msg, state), do: {:noreply, state}
+
+  @doc false
+  def broadcast_projected(stream_id, events) do
+    event_types = events |> Enum.map(& &1.event_type) |> Enum.uniq()
+
+    Phoenix.PubSub.broadcast(
+      Liteskill.PubSub,
+      "projector:#{stream_id}",
+      {:projected, stream_id, event_types}
+    )
+  end
 
   # --- Projection Logic ---
 

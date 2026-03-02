@@ -6,10 +6,13 @@ defmodule LiteskillWeb.E2E.ProfileTest do
 
     session
     |> visit("/profile/password")
-    |> fill_in(Query.css("[name='password[current]']"), with: old_password)
-    |> fill_in(Query.css("[name='password[new]']"), with: "NewSecurePassword456!")
-    |> fill_in(Query.css("[name='password[confirm]']"), with: "NewSecurePassword456!")
+    |> assert_has(Query.css("h2", text: "Change Password"))
+    |> take_screenshot(name: "profile/change_password/form")
+    |> fill_in(Query.css("input[name='password[current]']"), with: old_password)
+    |> fill_in(Query.css("input[name='password[new]']"), with: "NewSecurePassword456!")
+    |> fill_in(Query.css("input[name='password[confirm]']"), with: "NewSecurePassword456!")
     |> click(Query.button("Update Password"))
-    |> assert_has(Query.css(".alert", text: "Password updated"))
+    |> assert_has(Query.css("p.text-success", text: "Password changed successfully."))
+    |> take_screenshot(name: "profile/change_password/changed")
   end
 end

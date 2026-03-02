@@ -249,7 +249,7 @@ defmodule Liteskill.LLM.StreamHandler do
       # tool calls) use sync projection for discrete ordering guarantees.
       case Loader.execute(ConversationAggregate, stream_id, command) do
         {:ok, _state, events} -> Projector.project_events_async(stream_id, events)
-        # coveralls-ignore-next-line
+        # coveralls-ignore-next-line — aggregate is in :streaming state; :receive_chunk always succeeds
         {:error, reason} -> Logger.error("Failed to record chunk: #{inspect(reason)}")
       end
     end
@@ -299,7 +299,7 @@ defmodule Liteskill.LLM.StreamHandler do
 
           Logger.warning("StreamHandler #{label}, retrying in #{backoff}ms (attempt #{retry_count + 1})")
 
-          # coveralls-ignore-start — cancel path untestable without race
+          # coveralls-ignore-start — :cancel message path requires race condition between processes
           Retry.interruptible_sleep(backoff)
           # coveralls-ignore-stop
           # Clean up orphaned chunks from the failed attempt
@@ -720,7 +720,7 @@ defmodule Liteskill.LLM.StreamHandler do
 
           case Loader.execute(ConversationAggregate, stream_id, command) do
             {:ok, _state, events} -> Projector.project_events(stream_id, events)
-            # coveralls-ignore-next-line
+            # coveralls-ignore-next-line — aggregate is in :streaming state; :start_tool_call always succeeds
             {:error, reason} -> Logger.error("Failed to record tool call start: #{inspect(reason)}")
           end
         end)
@@ -842,7 +842,7 @@ defmodule Liteskill.LLM.StreamHandler do
 
     case Loader.execute(ConversationAggregate, stream_id, command) do
       {:ok, _state, events} -> Projector.project_events(stream_id, events)
-      # coveralls-ignore-next-line
+      # coveralls-ignore-next-line — aggregate accepts :complete_tool_call in both :streaming and :active states
       {:error, reason} -> Logger.error("Failed to record tool call complete: #{inspect(reason)}")
     end
 
@@ -881,7 +881,7 @@ defmodule Liteskill.LLM.StreamHandler do
 
     case Loader.execute(ConversationAggregate, stream_id, command) do
       {:ok, _state, events} -> Projector.project_events(stream_id, events)
-      # coveralls-ignore-next-line
+      # coveralls-ignore-next-line — aggregate accepts :complete_tool_call in both :streaming and :active states
       {:error, reason} -> Logger.error("Failed to record rejected tool call: #{inspect(reason)}")
     end
 
@@ -925,7 +925,7 @@ defmodule Liteskill.LLM.StreamHandler do
         maybe_record_usage(usage, message_id, latency_ms, stop_reason, opts)
         :ok
 
-      # coveralls-ignore-next-line
+      # coveralls-ignore-next-line — aggregate is in :streaming state; :complete_stream always succeeds
       {:error, reason} ->
         {:error, reason}
     end
@@ -968,7 +968,7 @@ defmodule Liteskill.LLM.StreamHandler do
         Projector.project_events(stream_id, events)
         {:error, {error_type, error_message}}
 
-      # coveralls-ignore-next-line
+      # coveralls-ignore-next-line — aggregate is in :streaming state; :fail_stream always succeeds
       {:error, reason} ->
         {:error, reason}
     end

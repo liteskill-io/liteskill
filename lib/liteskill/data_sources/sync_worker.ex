@@ -56,7 +56,7 @@ defmodule Liteskill.DataSources.SyncWorker do
         new_count = doc_count + process_entries(source, connector, entries, opts)
 
         if has_more do
-          # coveralls-ignore-next-line
+          # coveralls-ignore-next-line — recursive pagination; test stubs return has_more: false
           sync_loop(source, connector, next_cursor, opts, new_count)
         else
           {:ok, next_cursor, new_count}
@@ -73,7 +73,7 @@ defmodule Liteskill.DataSources.SyncWorker do
 
     Enum.reduce(entries, 0, fn entry, count ->
       if entry.deleted do
-        # coveralls-ignore-start
+        # coveralls-ignore-start — connector stubs never return deleted entries in tests
         handle_delete(source, entry, user_id, plug)
         count
         # coveralls-ignore-stop
@@ -81,7 +81,7 @@ defmodule Liteskill.DataSources.SyncWorker do
         case handle_upsert(source, connector, entry, user_id, plug, opts) do
           :changed -> count + 1
           :unchanged -> count
-          # coveralls-ignore-next-line
+          # coveralls-ignore-next-line — connector.fetch_content stub always succeeds in tests
           :error -> count
         end
       end
@@ -113,7 +113,7 @@ defmodule Liteskill.DataSources.SyncWorker do
         {:ok, fetched} ->
           upsert_fetched_content(source, entry, fetched, user_id, plug)
 
-        # coveralls-ignore-start
+        # coveralls-ignore-start — connector.fetch_content errors require real API failures
         {:error, _reason} ->
           :error
           # coveralls-ignore-stop
@@ -124,7 +124,7 @@ defmodule Liteskill.DataSources.SyncWorker do
   defp upsert_fetched_content(source, entry, fetched, user_id, plug) do
     content_size = byte_size(fetched.content || "")
 
-    # coveralls-ignore-start
+    # coveralls-ignore-start — test stubs return small content; real connectors may exceed limit
     if content_size > @max_content_bytes do
       Logger.warning(
         "SyncWorker: skipping oversized document #{entry.external_id} " <>
@@ -155,7 +155,7 @@ defmodule Liteskill.DataSources.SyncWorker do
 
           :changed
 
-        # coveralls-ignore-start
+        # coveralls-ignore-start — test stubs always produce content changes; error requires DB failure
         {:ok, :unchanged, _doc} ->
           :unchanged
 

@@ -95,7 +95,7 @@ defmodule Liteskill.Chat do
 
         {:ok, conversation}
 
-      # coveralls-ignore-start
+      # coveralls-ignore-start — ConversationAggregate.handle_command(:create) always succeeds for fresh streams
       {:error, reason} ->
         {:error, reason}
         # coveralls-ignore-stop
@@ -166,7 +166,7 @@ defmodule Liteskill.Chat do
 
           {:ok, new_conv}
 
-        # coveralls-ignore-start
+        # coveralls-ignore-start — Store.append_events fails only on UUID collision (:wrong_expected_version)
         {:error, reason} ->
           {:error, reason}
           # coveralls-ignore-stop

@@ -39,6 +39,7 @@ defmodule Liteskill.MixProject do
     [
       preferred_envs: [
         precommit: :test,
+        "test.e2e": :test,
         coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.html": :test
@@ -182,7 +183,7 @@ defmodule Liteskill.MixProject do
         "ecto.create --quiet",
         "ecto.migrate --quiet",
         "coveralls",
-        "cmd mdbook build docs/",
+        "cmd mdbook build docs/"
       ]
     ]
   end

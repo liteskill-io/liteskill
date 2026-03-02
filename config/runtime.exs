@@ -199,7 +199,7 @@ end
 if config_env() == :test do
   database_url =
     System.get_env("DATABASE_URL") ||
-      "ecto://postgres:postgres@localhost/liteskill_test#{System.get_env("MIX_TEST_PARTITION", "")}"
+      "ecto://liteskill:liteskill@localhost/liteskill_test#{System.get_env("MIX_TEST_PARTITION", "")}"
 
   config :liteskill, Liteskill.Repo,
     url: database_url,

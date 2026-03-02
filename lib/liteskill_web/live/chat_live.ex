@@ -189,6 +189,7 @@ defmodule LiteskillWeb.ChatLive do
         # Subscribe to PubSub for real-time updates
         topic = "event_store:#{conversation.stream_id}"
         Phoenix.PubSub.subscribe(Liteskill.PubSub, topic)
+        Phoenix.PubSub.subscribe(Liteskill.PubSub, "projector:#{conversation.stream_id}")
 
         # If conversation is stuck in streaming but we have no active task, recover it
         {conversation, streaming} =
@@ -452,7 +453,7 @@ defmodule LiteskillWeb.ChatLive do
                       edit_auto_confirm={@edit_auto_confirm_tools}
                     />
                     <SourcesComponents.sources_button
-                      :if={@editing_message_id != msg.id}
+                      :if={@editing_message_id != msg.id && msg.stop_reason != "tool_use"}
                       message={msg}
                     />
                     <%!-- Tool calls for completed messages (inline) --%>
@@ -943,43 +944,24 @@ defmodule LiteskillWeb.ChatLive do
     {:noreply, socket}
   end
 
+  def handle_info({:projected, _stream_id, event_types}, socket) do
+    socket =
+      cond do
+        "AssistantStreamCompleted" in event_types ->
+          do_reload_after_complete(socket)
+
+        "ToolCallStarted" in event_types or "ToolCallCompleted" in event_types ->
+          do_reload_tool_calls(socket)
+
+        true ->
+          socket
+      end
+
+    {:noreply, socket}
+  end
+
   def handle_info(:reload_after_complete, socket) do
-    case socket.assigns.conversation do
-      nil ->
-        {:noreply, socket}
-
-      conversation ->
-        user_id = socket.assigns.current_user.id
-
-        {:ok, messages} = Chat.list_messages(conversation.id, user_id)
-        conversations = Chat.list_conversations(user_id)
-
-        # Reload conversation to check actual status — avoids race when
-        # StreamHandler immediately starts a new round after completing
-        {:ok, fresh_conv} = Chat.get_conversation(conversation.id, user_id)
-
-        # The stream task runs the entire multi-round loop (including tool calls).
-        # Between rounds the DB status is "active", but the task is still working.
-        # Keep the typing indicator alive while the task process is running.
-        task_alive = task_alive?(socket.assigns.stream_task_pid)
-        still_streaming = fresh_conv.status == "streaming" || task_alive
-
-        # Preserve stream_content only when actually mid-stream (DB says "streaming").
-        # Between rounds (task alive, DB "active") clear it so the typing indicator shows
-        # and the already-committed text doesn't duplicate the DB messages.
-        db_streaming = fresh_conv.status == "streaming"
-
-        {:noreply,
-         assign(socket,
-           streaming: still_streaming,
-           stream_content: if(db_streaming, do: socket.assigns.stream_content, else: ""),
-           messages: messages,
-           conversations: conversations,
-           conversation: fresh_conv,
-           pending_tool_calls: if(task_alive && db_streaming, do: socket.assigns.pending_tool_calls, else: []),
-           stream_task_pid: if(still_streaming, do: socket.assigns.stream_task_pid)
-         )}
-    end
+    {:noreply, do_reload_after_complete(socket)}
   end
 
   def handle_info(:fetch_tools, socket), do: ToolHandler.handle_info(:fetch_tools, socket)
@@ -1013,9 +995,8 @@ defmodule LiteskillWeb.ChatLive do
   end
 
   defp handle_event_store_event(%{event_type: "AssistantStreamCompleted"}, socket) do
-    # Delay reload to let the Projector finish updating the DB.
-    # Keep streaming content visible until then.
-    Process.send_after(self(), :reload_after_complete, 100)
+    # Reload is triggered by {:projected, ...} from the Projector after sync projection.
+    # The :reload_after_complete handler remains as a fallback.
     socket
   end
 
@@ -1034,18 +1015,17 @@ defmodule LiteskillWeb.ChatLive do
   end
 
   defp handle_event_store_event(%{event_type: "ToolCallStarted", data: data}, socket) do
-    # Build tool call immediately from event data to avoid race with projector
+    # Build tool call immediately from event data to avoid race with projector.
+    # Full DB reload is triggered by {:projected, ...} from the Projector.
     tc = ToolHandler.build_tool_call_from_event(data)
 
     pending = socket.assigns.pending_tool_calls ++ [tc]
-
-    # Also schedule a DB reload to sync fully
-    Process.send_after(self(), :reload_tool_calls, 500)
     assign(socket, pending_tool_calls: pending)
   end
 
   defp handle_event_store_event(%{event_type: "ToolCallCompleted", data: data}, socket) do
-    # Update the pending tool call status immediately
+    # Update the pending tool call status immediately.
+    # Full DB reload is triggered by {:projected, ...} from the Projector.
     tool_use_id = data["tool_use_id"]
 
     pending =
@@ -1057,14 +1037,79 @@ defmodule LiteskillWeb.ChatLive do
         end
       end)
 
-    # Also schedule a DB reload to sync fully
-    Process.send_after(self(), :reload_tool_calls, 500)
     assign(socket, pending_tool_calls: pending)
   end
 
   defp handle_event_store_event(_event, socket), do: socket
 
   # --- Helpers ---
+
+  defp do_reload_after_complete(socket) do
+    case socket.assigns.conversation do
+      nil ->
+        socket
+
+      conversation ->
+        user_id = socket.assigns.current_user.id
+
+        {:ok, messages} = Chat.list_messages(conversation.id, user_id)
+        conversations = Chat.list_conversations(user_id)
+
+        # Reload conversation to check actual status — avoids race when
+        # StreamHandler immediately starts a new round after completing
+        {:ok, fresh_conv} = Chat.get_conversation(conversation.id, user_id)
+
+        # The stream task runs the entire multi-round loop (including tool calls).
+        # Between rounds the DB status is "active", but the task is still working.
+        # Keep the typing indicator alive while the task process is running.
+        task_alive = task_alive?(socket.assigns.stream_task_pid)
+        still_streaming = fresh_conv.status == "streaming" || task_alive
+
+        # Preserve stream_content only when actually mid-stream (DB says "streaming").
+        # Between rounds (task alive, DB "active") clear it so the typing indicator shows
+        # and the already-committed text doesn't duplicate the DB messages.
+        db_streaming = fresh_conv.status == "streaming"
+
+        assign(socket,
+          streaming: still_streaming,
+          stream_content: if(db_streaming, do: socket.assigns.stream_content, else: ""),
+          messages: messages,
+          conversations: conversations,
+          conversation: fresh_conv,
+          pending_tool_calls: if(task_alive && db_streaming, do: socket.assigns.pending_tool_calls, else: []),
+          stream_task_pid: if(still_streaming, do: socket.assigns.stream_task_pid)
+        )
+    end
+  end
+
+  defp do_reload_tool_calls(socket) do
+    case socket.assigns.conversation do
+      nil ->
+        socket
+
+      conversation ->
+        user_id = socket.assigns.current_user.id
+
+        {:ok, messages} = Chat.list_messages(conversation.id, user_id)
+        db_pending = ToolHandler.load_pending_tool_calls(messages)
+
+        # During streaming, load_pending_tool_calls returns [] because the message
+        # hasn't completed with stop_reason: "tool_use" yet. Keep the in-memory
+        # pending_tool_calls built from PubSub events in that case.
+        pending =
+          if db_pending == [] do
+            if socket.assigns.streaming && socket.assigns.pending_tool_calls != [] do
+              socket.assigns.pending_tool_calls
+            else
+              []
+            end
+          else
+            db_pending
+          end
+
+        assign(socket, messages: messages, pending_tool_calls: pending)
+    end
+  end
 
   defp trigger_llm_stream(conversation, user_id, socket, tool_config) do
     {:ok, messages} = Chat.list_messages(conversation.id, user_id)
@@ -1148,6 +1193,14 @@ defmodule LiteskillWeb.ChatLive do
           {opts, llm_messages}
       end
 
+    # E2E test hook: inject mock stream function (and optional tool opts) from application config
+    opts =
+      case Application.get_env(:liteskill, :e2e_stream_fn) do
+        nil -> opts
+        stream_fn when is_function(stream_fn) -> [{:stream_fn, stream_fn} | opts]
+        extra_opts when is_list(extra_opts) -> extra_opts ++ opts
+      end
+
     {:ok, pid} =
       Task.Supervisor.start_child(Liteskill.TaskSupervisor, fn ->
         StreamHandler.handle_stream(conversation.stream_id, llm_messages, opts)
@@ -1161,6 +1214,7 @@ defmodule LiteskillWeb.ChatLive do
     case socket.assigns[:conversation] do
       %{stream_id: stream_id} when not is_nil(stream_id) ->
         Phoenix.PubSub.unsubscribe(Liteskill.PubSub, "event_store:#{stream_id}")
+        Phoenix.PubSub.unsubscribe(Liteskill.PubSub, "projector:#{stream_id}")
 
       _ ->
         :ok

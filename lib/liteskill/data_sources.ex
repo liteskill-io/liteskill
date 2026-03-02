@@ -510,7 +510,7 @@ defmodule Liteskill.DataSources do
                 {:error, :not_found}
             end
 
-          # coveralls-ignore-start
+          # coveralls-ignore-start — FK on_delete: :delete_all ensures ancestors always exist for existing children
           _ ->
             {:error, :not_found}
             # coveralls-ignore-stop
@@ -572,10 +572,8 @@ defmodule Liteskill.DataSources do
           []
         end
 
-      # coveralls-ignore-start
       _ ->
         []
-        # coveralls-ignore-stop
     end
   end
 
@@ -591,11 +589,8 @@ defmodule Liteskill.DataSources do
           {:error, :not_found}
         end
 
-      # coveralls-ignore-start
       {:ok, _doc} ->
         {:error, :not_found}
-
-      # coveralls-ignore-stop
 
       error ->
         error

@@ -875,6 +875,14 @@ defmodule Liteskill.DataSourcesTest do
       assert length(hd(tree).children) == 1
       assert hd(hd(tree).children).document.title == "Grandchild"
     end
+
+    test "returns empty list for non-wiki doc not owned by user", %{owner: owner, other: other} do
+      {:ok, source} =
+        DataSources.create_source(%{name: "Manual", source_type: "manual"}, owner.id)
+
+      {:ok, doc} = DataSources.create_document(source.id, %{title: "Root"}, owner.id)
+      assert DataSources.space_tree(source.id, doc.id, other.id) == []
+    end
   end
 
   describe "find_root_ancestor/2" do
@@ -929,6 +937,14 @@ defmodule Liteskill.DataSourcesTest do
     test "returns error for nonexistent document", %{owner: owner} do
       assert {:error, :not_found} =
                DataSources.find_root_ancestor(Ecto.UUID.generate(), owner.id)
+    end
+
+    test "returns :not_found for non-wiki doc owned by another user", %{owner: owner, other: other} do
+      {:ok, source} =
+        DataSources.create_source(%{name: "Manual", source_type: "manual"}, owner.id)
+
+      {:ok, doc} = DataSources.create_document(source.id, %{title: "Root"}, owner.id)
+      assert {:error, :not_found} = DataSources.find_root_ancestor(doc.id, other.id)
     end
   end
 
