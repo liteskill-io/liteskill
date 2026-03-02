@@ -272,8 +272,7 @@ defmodule Liteskill.Reports do
 
   defp parse_path(path) do
     path
-    |> String.split(">")
-    |> Enum.map(&String.trim/1)
+    |> String.split(" > ")
     |> Enum.reject(&(&1 == ""))
   end
 

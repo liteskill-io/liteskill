@@ -80,66 +80,33 @@ defmodule Liteskill.Agents.Actions.LlmGenerate do
 
   @doc false
   def build_system_prompt(state) do
-    parts = []
-
-    parts =
-      if state[:system_prompt] && state[:system_prompt] != "" do
-        parts ++ [state[:system_prompt]]
-      else
-        parts
-      end
-
-    parts = parts ++ ["You are acting as a #{state[:role]} in a multi-agent pipeline."]
-
-    parts =
-      if state[:backstory] && state[:backstory] != "" do
-        parts ++ ["Background: #{state[:backstory]}"]
-      else
-        parts
-      end
-
-    parts =
-      if is_map(state[:opinions]) && map_size(state[:opinions]) > 0 do
-        opinion_lines =
-          Enum.map_join(state[:opinions], "\n", fn {k, v} -> "- #{k}: #{v}" end)
-
-        parts ++ ["Your perspectives:\n#{opinion_lines}"]
-      else
-        parts
-      end
-
     strategy_hint =
       case state[:strategy] do
-        "react" ->
-          "Use a Reason-Act approach: think step by step, observe, then act."
-
-        "chain_of_thought" ->
-          "Use chain-of-thought reasoning: work through the problem step by step."
-
-        "tree_of_thoughts" ->
-          "Explore multiple approaches before selecting the best one."
-
-        "direct" ->
-          "Provide a direct, focused response."
-
-        other ->
-          "Use the #{other} approach."
+        "react" -> "Use a Reason-Act approach: think step by step, observe, then act."
+        "chain_of_thought" -> "Use chain-of-thought reasoning: work through the problem step by step."
+        "tree_of_thoughts" -> "Explore multiple approaches before selecting the best one."
+        "direct" -> "Provide a direct, focused response."
+        other -> "Use the #{other} approach."
       end
 
-    parts = parts ++ [strategy_hint]
-
-    # Batch optimization hint when tools are available
     parts =
-      if (state[:tools] || []) == [] do
-        parts
-      else
-        parts ++
-          [
+      [
+        non_empty(state[:system_prompt]),
+        "You are acting as a #{state[:role]} in a multi-agent pipeline.",
+        if(non_empty(state[:backstory]), do: "Background: #{state[:backstory]}"),
+        if(is_map(state[:opinions]) && map_size(state[:opinions]) > 0,
+          do:
+            "Your perspectives:\n" <>
+              Enum.map_join(state[:opinions], "\n", fn {k, v} -> "- #{k}: #{v}" end)
+        ),
+        strategy_hint,
+        if((state[:tools] || []) != [],
+          do:
             "When using tools, prefer batching multiple operations into a single tool call " <>
               "where the tool supports batch operations (e.g. multiple actions in wiki__write " <>
               "or reports__modify_sections). This reduces round-trips and improves efficiency."
-          ]
-      end
+        )
+      ]
 
     parts =
       if state[:report_id] do
@@ -159,8 +126,15 @@ defmodule Liteskill.Agents.Actions.LlmGenerate do
         parts
       end
 
-    Enum.join(parts, "\n\n")
+    parts
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("\n\n")
   end
+
+  # coveralls-ignore-next-line — nil system_prompt only occurs if agent config omits it
+  defp non_empty(nil), do: nil
+  defp non_empty(""), do: nil
+  defp non_empty(str) when is_binary(str), do: str
 
   # coveralls-ignore-start
   defp maybe_inject_rag_context(%{datasource_ids: ids, prompt: prompt, user_id: user_id} = state)

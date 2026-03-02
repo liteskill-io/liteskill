@@ -328,13 +328,24 @@ defmodule Liteskill.Chat do
 
   def get_conversation_tree(conversation_id, user_id) do
     with {:ok, conversation} <- authorize_conversation(conversation_id, user_id) do
-      # Find root
       root = find_root(conversation)
 
-      # Get all descendants
       descendants =
-        Conversation
-        |> where([c], c.parent_conversation_id == ^root.id)
+        {"tree", Conversation}
+        |> recursive_ctes(true)
+        |> with_cte("tree",
+          as:
+            fragment(
+              """
+              SELECT c.* FROM conversations c WHERE c.parent_conversation_id = ?
+              UNION ALL
+              SELECT c.* FROM conversations c
+              INNER JOIN tree t ON c.parent_conversation_id = t.id
+              """,
+              type(^root.id, :binary_id)
+            )
+        )
+        |> select([t], t)
         |> Repo.all()
 
       {:ok, [root | descendants]}

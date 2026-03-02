@@ -112,7 +112,7 @@ defmodule Liteskill.Runs do
     |> where([r], r.user_id == ^user_id or r.id in subquery(accessible_ids))
     |> order_by([r], desc: r.inserted_at)
     |> limit(1000)
-    |> preload([:team_definition, :run_tasks, :run_logs])
+    |> preload([:team_definition, :run_tasks])
     |> Repo.all()
   end
 

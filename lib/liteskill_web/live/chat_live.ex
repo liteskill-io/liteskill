@@ -245,12 +245,6 @@ defmodule LiteskillWeb.ChatLive do
 
   @impl true
   def render(assigns) do
-    assigns =
-      assigns
-      |> assign_new(:show_raw_output_modal, fn -> false end)
-      |> assign_new(:raw_output_message_id, fn -> nil end)
-      |> assign_new(:raw_output_content, fn -> "" end)
-
     ~H"""
     <div class="flex h-screen relative">
       <Layouts.sidebar
@@ -1193,13 +1187,7 @@ defmodule LiteskillWeb.ChatLive do
           {opts, llm_messages}
       end
 
-    # E2E test hook: inject mock stream function (and optional tool opts) from application config
-    opts =
-      case Application.get_env(:liteskill, :e2e_stream_fn) do
-        nil -> opts
-        stream_fn when is_function(stream_fn) -> [{:stream_fn, stream_fn} | opts]
-        extra_opts when is_list(extra_opts) -> extra_opts ++ opts
-      end
+    opts = maybe_inject_e2e_opts(opts)
 
     {:ok, pid} =
       Task.Supervisor.start_child(Liteskill.TaskSupervisor, fn ->
@@ -1250,4 +1238,18 @@ defmodule LiteskillWeb.ChatLive do
 
   defp task_alive?(nil), do: false
   defp task_alive?(pid), do: Process.alive?(pid)
+
+  defp e2e_enabled?, do: Application.get_env(:liteskill, :env) == :test
+
+  defp maybe_inject_e2e_opts(opts) do
+    if e2e_enabled?() do
+      case Application.get_env(:liteskill, :e2e_stream_fn) do
+        nil -> opts
+        stream_fn when is_function(stream_fn) -> [{:stream_fn, stream_fn} | opts]
+        extra_opts when is_list(extra_opts) -> extra_opts ++ opts
+      end
+    else
+      opts
+    end
+  end
 end

@@ -40,7 +40,7 @@ defmodule Liteskill.Chat.Events do
   """
   def serialize(%module{} = event) do
     event_type = Map.fetch!(@event_types_reverse, module)
-    %{event_type: event_type, data: stringify_keys(Map.from_struct(event))}
+    %{event_type: event_type, data: Liteskill.MapUtils.stringify_keys(Map.from_struct(event))}
   end
 
   @doc """
@@ -55,17 +55,6 @@ defmodule Liteskill.Chat.Events do
   Returns the struct module for an event type string.
   """
   def module_for(event_type), do: Map.fetch!(@event_types, event_type)
-
-  defp stringify_keys(map) when is_map(map) do
-    Map.new(map, fn
-      {key, value} when is_atom(key) -> {Atom.to_string(key), stringify_value(value)}
-      {key, value} -> {key, stringify_value(value)}
-    end)
-  end
-
-  defp stringify_value(map) when is_map(map) and not is_struct(map), do: stringify_keys(map)
-  defp stringify_value(list) when is_list(list), do: Enum.map(list, &stringify_value/1)
-  defp stringify_value(value), do: value
 
   defp atomize_keys(map) when is_map(map) do
     Map.new(map, fn

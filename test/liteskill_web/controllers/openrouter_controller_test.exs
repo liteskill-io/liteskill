@@ -93,7 +93,7 @@ defmodule LiteskillWeb.OpenRouterControllerTest do
       provider = LlmProviders.get_provider_by_name("OpenRouter", user.id)
       assert provider
       assert provider.provider_type == "openrouter"
-      assert provider.instance_wide == true
+      assert provider.instance_wide == false
     end
 
     test "updates existing provider on re-auth", %{conn: conn, user: user} do

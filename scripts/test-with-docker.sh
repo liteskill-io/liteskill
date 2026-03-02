@@ -6,7 +6,7 @@ CONTAINER_NAME="liteskill-test-pg-$$"
 docker run -d --name "$CONTAINER_NAME" \
   -e POSTGRES_PASSWORD=postgres \
   -p 0:5432 \
-  pgvector/pgvector:pg16 > /dev/null
+  pgvector/pgvector:pg18 > /dev/null
 
 MAPPED_PORT=$(docker port "$CONTAINER_NAME" 5432 | head -1 | cut -d: -f2)
 

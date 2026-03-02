@@ -196,16 +196,7 @@ defmodule Liteskill.Aggregate.Loader do
 
   # --- Key Conversion ---
 
-  defp stringify_keys(map) when is_map(map) do
-    Map.new(map, fn {key, value} -> {to_string(key), stringify_value(value)} end)
-  end
-
-  # coveralls-ignore-start - exercised via Events.serialize tests; Loader snapshot
-  # path uses Counter (flat struct) so nested branches are not hit in loader tests.
-  defp stringify_value(map) when is_map(map) and not is_struct(map), do: stringify_keys(map)
-  defp stringify_value(list) when is_list(list), do: Enum.map(list, &stringify_value/1)
-  # coveralls-ignore-stop
-  defp stringify_value(value), do: value
+  defp stringify_keys(map), do: Liteskill.MapUtils.stringify_keys(map)
 
   defp atomize_keys(map) when is_map(map) do
     Map.new(map, fn

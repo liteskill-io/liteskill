@@ -224,8 +224,7 @@ defmodule Liteskill.Runs.RunnerTest do
       {team, agent} = create_team_with_agent(owner, llm_model_id: model.id)
 
       Req.Test.stub(RunnerTest, fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        _decoded = Jason.decode!(body)
+        {:ok, _body, conn} = Plug.Conn.read_body(conn)
 
         response = %{
           "id" => "msg_test_#{System.unique_integer([:positive])}",
@@ -404,8 +403,7 @@ defmodule Liteskill.Runs.RunnerTest do
       {:ok, team} = Teams.get_team(team.id, owner.id)
 
       Req.Test.stub(RunnerTest, fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        _decoded = Jason.decode!(body)
+        {:ok, _body, conn} = Plug.Conn.read_body(conn)
 
         response = %{
           "id" => "msg_test_#{System.unique_integer([:positive])}",
@@ -591,8 +589,7 @@ defmodule Liteskill.Runs.RunnerTest do
       {:ok, team} = Teams.get_team(team.id, owner.id)
 
       Req.Test.stub(RunnerTest, fn conn ->
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        _decoded = Jason.decode!(body)
+        {:ok, _body, conn} = Plug.Conn.read_body(conn)
 
         response = %{
           "id" => "msg_test_#{System.unique_integer([:positive])}",

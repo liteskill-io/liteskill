@@ -164,7 +164,7 @@ defmodule LiteskillWeb.OpenRouterController do
                  name: @provider_name,
                  provider_type: "openrouter",
                  api_key: key,
-                 instance_wide: true,
+                 instance_wide: false,
                  user_id: user.id
                }) do
             {:ok, provider} ->

@@ -58,32 +58,7 @@ defmodule LiteskillWeb.AuthController do
     |> json(%{error: "authentication failed"})
   end
 
-  def logout(conn, _params) do
-    session_token = get_session(conn, :session_token)
-    conn_info = SessionHelpers.conn_info(conn)
-
-    if session_token do
-      case Accounts.delete_and_return_session(session_token) do
-        {:ok, session} ->
-          Accounts.log_auth_event(%{
-            event_type: "logout",
-            user_id: session.user_id,
-            ip_address: conn_info.ip_address,
-            user_agent: conn_info.user_agent
-          })
-
-        :error ->
-          :ok
-      end
-    end
-
-    conn
-    |> configure_session(drop: true)
-    |> json(%{ok: true})
-  end
-
-  # A user created within the last 5 seconds during an OIDC callback is a new registration.
   defp recently_created?(%{inserted_at: inserted_at}) do
-    DateTime.diff(DateTime.utc_now(), inserted_at, :second) < 5
+    SessionHelpers.recently_created?(inserted_at)
   end
 end

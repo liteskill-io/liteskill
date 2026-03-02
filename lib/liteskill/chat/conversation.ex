@@ -45,6 +45,7 @@ defmodule Liteskill.Chat.Conversation do
       :llm_model_id
     ])
     |> validate_required([:stream_id, :user_id, :status])
+    |> validate_inclusion(:status, ~w(created active streaming archived))
     |> unique_constraint(:stream_id)
     |> foreign_key_constraint(:user_id)
   end

@@ -135,7 +135,7 @@ defmodule Liteskill.LlmGateway.ProviderGate do
     remaining = state.retry_after_until - now
 
     :telemetry.execute(
-      [:liteskill, :llm_gateway, :circuit_opened],
+      [:liteskill, :llm_gateway, :retry_after],
       %{count: 1},
       %{provider_id: state.provider_id, reason: :retry_after}
     )

@@ -52,6 +52,7 @@ defmodule Liteskill.Chat.Message do
       :tool_config
     ])
     |> validate_required([:conversation_id, :role, :position])
+    |> validate_inclusion(:role, ~w(user assistant))
     |> foreign_key_constraint(:conversation_id)
   end
 end

@@ -9,8 +9,6 @@
     "lib/liteskill_web/telemetry.ex",
     "lib/liteskill_web/endpoint.ex",
     "lib/liteskill_web/gettext.ex",
-    "lib/liteskill_web/controllers/page_controller.ex",
-    "lib/liteskill_web/controllers/page_html.ex",
     "lib/liteskill_web/controllers/session_controller.ex",
     "lib/liteskill_web/controllers/auth_controller.ex",
     "lib/liteskill_web/controllers/saml_auth_controller.ex",

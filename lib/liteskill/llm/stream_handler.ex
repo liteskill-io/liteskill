@@ -768,7 +768,10 @@ defmodule Liteskill.LLM.StreamHandler do
           %{"role" => "user", "content" => tool_result_content}
         ]
 
-    next_opts = Keyword.put(opts, :tool_round, Keyword.get(opts, :tool_round, 0) + 1)
+    next_opts =
+      opts
+      |> Keyword.put(:tool_round, Keyword.get(opts, :tool_round, 0) + 1)
+      |> Keyword.put(:skip_gateway, true)
 
     # Check cost limit before continuing the tool-call loop
     cost_limit = Keyword.get(next_opts, :cost_limit)

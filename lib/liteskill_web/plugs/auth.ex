@@ -8,8 +8,7 @@ defmodule LiteskillWeb.Plugs.Auth do
 
   alias Liteskill.Accounts
   alias Liteskill.SingleUser
-
-  @touch_throttle_seconds 60
+  alias LiteskillWeb.Plugs.SessionHelpers
 
   def init(action), do: action
 
@@ -50,12 +49,5 @@ defmodule LiteskillWeb.Plugs.Auth do
     end
   end
 
-  defp maybe_touch_session(%{last_active_at: last_active_at} = session) do
-    now = DateTime.truncate(DateTime.utc_now(), :second)
-    elapsed = DateTime.diff(now, last_active_at, :second)
-
-    if elapsed >= @touch_throttle_seconds do
-      Accounts.touch_session(session)
-    end
-  end
+  defp maybe_touch_session(session), do: SessionHelpers.maybe_touch_session(session)
 end

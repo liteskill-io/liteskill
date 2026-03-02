@@ -168,7 +168,7 @@ defmodule Liteskill.Chat.StreamRegistry do
               )
 
               Process.send_after(
-                Process.whereis(__MODULE__),
+                __MODULE__,
                 {:recover, conv_id, attempt + 1},
                 backoff
               )

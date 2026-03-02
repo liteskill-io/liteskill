@@ -58,8 +58,8 @@ defmodule Liteskill.LlmGateway.TokenBucket do
       end
 
     if count == :unavailable do
-      # coveralls-ignore-next-line — only reachable if ETS table missing during boot
-      {:error, :rate_limited, window_ms}
+      # coveralls-ignore-next-line — fail open: allow request if ETS table missing during boot
+      :ok
     else
       if count <= limit do
         :telemetry.execute(

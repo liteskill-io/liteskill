@@ -671,6 +671,8 @@ defmodule Liteskill.BuiltinTools.AgentStudioTest do
       assert data["status"] == "pending"
       assert data["message"] =~ "poll"
 
+      wait_for_background_run(run_id, user.id)
+
       # List
       assert {:ok, result} = AgentStudioTool.call_tool("agent_studio__list_runs", %{}, ctx)
       data = decode_content(result)
@@ -1055,6 +1057,8 @@ defmodule Liteskill.BuiltinTools.AgentStudioTest do
       {:ok, run} = Liteskill.Runs.get_run(run_id, user.id)
       admin_default = Liteskill.Settings.get_default_mcp_run_cost_limit()
       assert Decimal.compare(run.cost_limit, admin_default) == :eq
+
+      wait_for_background_run(run_id, user.id)
     end
 
     test "caps cost_limit to admin max when requested higher", %{user: user} do
@@ -1073,6 +1077,8 @@ defmodule Liteskill.BuiltinTools.AgentStudioTest do
       {:ok, run} = Liteskill.Runs.get_run(run_id, user.id)
       admin_default = Liteskill.Settings.get_default_mcp_run_cost_limit()
       assert Decimal.compare(run.cost_limit, admin_default) == :eq
+
+      wait_for_background_run(run_id, user.id)
     end
 
     test "defaults non-positive cost_limit to admin max", %{user: user} do
@@ -1091,6 +1097,8 @@ defmodule Liteskill.BuiltinTools.AgentStudioTest do
       {:ok, run} = Liteskill.Runs.get_run(run_id, user.id)
       admin_default = Liteskill.Settings.get_default_mcp_run_cost_limit()
       assert Decimal.compare(run.cost_limit, admin_default) == :eq
+
+      wait_for_background_run(run_id, user.id)
     end
 
     test "uses requested cost_limit when under admin max", %{user: user} do
@@ -1108,6 +1116,8 @@ defmodule Liteskill.BuiltinTools.AgentStudioTest do
 
       {:ok, run} = Liteskill.Runs.get_run(run_id, user.id)
       assert Decimal.compare(run.cost_limit, Decimal.new("0.25")) == :eq
+
+      wait_for_background_run(run_id, user.id)
     end
   end
 
@@ -1151,5 +1161,23 @@ defmodule Liteskill.BuiltinTools.AgentStudioTest do
 
   defp decode_content(%{"content" => [%{"text" => json}]}) do
     Jason.decode!(json)
+  end
+
+  # start_run fires a fire-and-forget Task via Task.Supervisor.start_child.
+  # Wait for the background Runner.run to reach a terminal state before the
+  # test exits, otherwise Sandbox.stop_owner revokes the DB connection while
+  # the background task is still doing DB work (causing noisy
+  # DBConnection.ConnectionError / OwnershipError logs).
+  defp wait_for_background_run(run_id, user_id) do
+    Enum.reduce_while(1..40, nil, fn _, _ ->
+      case Liteskill.Runs.get_run(run_id, user_id) do
+        {:ok, %{status: status}} when status in ["completed", "failed", "cancelled"] ->
+          {:halt, :ok}
+
+        _ ->
+          Process.sleep(50)
+          {:cont, nil}
+      end
+    end)
   end
 end

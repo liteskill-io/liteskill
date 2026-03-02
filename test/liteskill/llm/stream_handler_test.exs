@@ -30,8 +30,6 @@ defmodule Liteskill.LLM.StreamHandlerTest do
     {:ok, conv} = Chat.create_conversation(%{user_id: user.id, title: "Stream Test"})
     {:ok, _msg} = Chat.send_message(conv.id, user.id, "Hello!")
 
-    on_exit(fn -> :ok end)
-
     %{user: user, conversation: conv}
   end
 

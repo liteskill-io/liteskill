@@ -276,12 +276,10 @@ defmodule Liteskill.Chat.MessageBuilderTest do
 
       result = MessageBuilder.build_llm_messages([msg])
 
-      # No completed tool calls, so just assistant message with toolUse block (no tool result user message)
+      # No completed tool calls → no toolUse blocks emitted (keeps toolUse/toolResult in sync).
+      # Message still appears with empty content since it's a tool_use stop_reason message.
       assert length(result) == 1
-      assistant_msg = hd(result)
-      assert assistant_msg["role"] == "assistant"
-      # Content should only have toolUse (no text block since content is empty)
-      assert [%{"toolUse" => _}] = assistant_msg["content"]
+      assert hd(result) == %{"role" => "assistant", "content" => []}
     end
   end
 

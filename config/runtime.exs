@@ -42,7 +42,7 @@ if saml_metadata_file = System.get_env("SAML_IDP_METADATA_FILE") do
 
   port = String.to_integer(System.get_env("PORT", "4000"))
   host = System.get_env("PHX_HOST", "localhost")
-  scheme = if System.get_env("PHX_SERVER"), do: "https", else: "http"
+  scheme = System.get_env("PHX_SCHEME", "http")
   saml_base_url = System.get_env("SAML_BASE_URL", "#{scheme}://#{host}:#{port}/sso")
 
   config :liteskill, :saml_configured, true

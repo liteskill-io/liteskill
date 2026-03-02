@@ -49,7 +49,7 @@ defmodule Liteskill.Chat.MessageBuilder do
       completed_tcs = Enum.filter(msg.tool_calls, &(&1.status == "completed"))
 
       tool_use_blocks =
-        Enum.map(msg.tool_calls, fn tc ->
+        Enum.map(completed_tcs, fn tc ->
           %{
             "toolUse" => %{
               "toolUseId" => tc.tool_use_id,

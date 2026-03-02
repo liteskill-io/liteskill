@@ -139,8 +139,8 @@ defmodule Liteskill.Usage do
           :ok
 
         {:error, changeset} ->
-          Logger.warning("Failed to record usage: #{inspect(changeset.errors)}")
-          :ok
+          Logger.error("Failed to record usage: #{inspect(changeset.errors)}")
+          {:error, :usage_recording_failed}
       end
     else
       :ok

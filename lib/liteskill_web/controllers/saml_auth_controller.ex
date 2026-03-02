@@ -98,6 +98,6 @@ defmodule LiteskillWeb.SamlAuthController do
   end
 
   defp recently_created?(%{inserted_at: inserted_at}) do
-    DateTime.diff(DateTime.utc_now(), inserted_at, :second) < 5
+    SessionHelpers.recently_created?(inserted_at)
   end
 end

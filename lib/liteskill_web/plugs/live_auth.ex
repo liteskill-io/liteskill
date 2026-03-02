@@ -11,8 +11,7 @@ defmodule LiteskillWeb.Plugs.LiveAuth do
   alias Liteskill.Accounts
   alias Liteskill.Accounts.User
   alias Liteskill.SingleUser
-
-  @touch_throttle_seconds 60
+  alias LiteskillWeb.Plugs.SessionHelpers
 
   def on_mount(:require_authenticated, _params, session, socket) do
     if SingleUser.enabled?() do
@@ -123,12 +122,5 @@ defmodule LiteskillWeb.Plugs.LiveAuth do
     end
   end
 
-  defp maybe_touch_session(%{last_active_at: last_active_at} = session) do
-    now = DateTime.truncate(DateTime.utc_now(), :second)
-    elapsed = DateTime.diff(now, last_active_at, :second)
-
-    if elapsed >= @touch_throttle_seconds do
-      Accounts.touch_session(session)
-    end
-  end
+  defp maybe_touch_session(session), do: SessionHelpers.maybe_touch_session(session)
 end
