@@ -111,7 +111,9 @@ jobs:
         run: mix compile
 
       - name: Set up database user
-        run: psql -h localhost -U postgres -c "CREATE USER liteskill WITH PASSWORD 'liteskill' CREATEDB;"
+        run: |
+          psql -h localhost -U postgres -c "CREATE USER liteskill WITH PASSWORD 'liteskill' CREATEDB;"
+          psql -h localhost -U postgres -c "GRANT ALL ON SCHEMA public TO liteskill;"
         env:
           PGPASSWORD: postgres
 
@@ -220,7 +222,9 @@ jobs:
         run: mix compile
 
       - name: Set up database user
-        run: psql -h localhost -U postgres -c "CREATE USER liteskill WITH PASSWORD 'liteskill' CREATEDB;"
+        run: |
+          psql -h localhost -U postgres -c "CREATE USER liteskill WITH PASSWORD 'liteskill' CREATEDB;"
+          psql -h localhost -U postgres -c "GRANT ALL ON SCHEMA public TO liteskill;"
         env:
           PGPASSWORD: postgres
 
