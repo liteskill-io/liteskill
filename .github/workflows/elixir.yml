@@ -110,6 +110,11 @@ jobs:
       - name: Compile
         run: mix compile
 
+      - name: Set up database user
+        run: psql -h localhost -U postgres -c "CREATE USER liteskill WITH PASSWORD 'liteskill' CREATEDB;"
+        env:
+          PGPASSWORD: postgres
+
       - name: Run tests with coverage
         run: mix ecto.create --quiet && mix ecto.migrate --quiet && mix coveralls
 
@@ -213,6 +218,11 @@ jobs:
 
       - name: Compile
         run: mix compile
+
+      - name: Set up database user
+        run: psql -h localhost -U postgres -c "CREATE USER liteskill WITH PASSWORD 'liteskill' CREATEDB;"
+        env:
+          PGPASSWORD: postgres
 
       - name: Run E2E tests
         run: mix test.e2e
