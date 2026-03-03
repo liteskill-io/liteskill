@@ -1,5 +1,5 @@
 defmodule LiteskillWeb.ErrorJSONTest do
-  use LiteskillWeb.ConnCase, async: true
+  use LiteskillWeb.ConnCase, async: false
 
   test "renders 404" do
     assert LiteskillWeb.ErrorJSON.render("404.json", %{}) == %{errors: %{detail: "Not Found"}}

@@ -1,5 +1,5 @@
 defmodule LiteskillWeb.GroupControllerTest do
-  use LiteskillWeb.ConnCase, async: true
+  use LiteskillWeb.ConnCase, async: false
 
   alias Liteskill.Groups
 

@@ -229,7 +229,7 @@ defmodule Liteskill.Rag do
                 position: chunk.position,
                 metadata: Map.get(chunk, :metadata, %{}),
                 token_count: Map.get(chunk, :token_count),
-                embedding: Pgvector.new(embedding),
+                embedding: :erlang.term_to_binary(embedding),
                 document_id: document_id,
                 inserted_at: now,
                 updated_at: now
@@ -281,8 +281,13 @@ defmodule Liteskill.Rag do
     end
   end
 
+  # coveralls-ignore-next-line — function head declaration required for multi-clause default args, not directly executed
+  def rerank(query, chunks, opts \\ [])
+
   # coveralls-ignore-next-line
-  def rerank(query, chunks, opts \\ []) do
+  def rerank(_query, [], _opts), do: {:ok, []}
+
+  def rerank(query, chunks, opts) do
     {plug_opts, rest} = Keyword.split(opts, [:plug])
     top_n = Keyword.get(rest, :top_n, 5)
     user_id = Keyword.get(rest, :user_id)
@@ -480,9 +485,9 @@ defmodule Liteskill.Rag do
     case Repo.one(
            from(d in Document,
              where:
-               fragment("? ->> 'wiki_document_id' = ?", d.metadata, ^wiki_document_id) and
+               fragment("json_extract(?, '$.wiki_document_id') = ?", d.metadata, ^wiki_document_id) and
                  (d.user_id == ^user_id or
-                    fragment("(?->>'wiki_space_id')::uuid", d.metadata) in subquery(wiki_space_ids))
+                    fragment("json_extract(?, '$.wiki_space_id')", d.metadata) in subquery(wiki_space_ids))
            )
          ) do
       %Document{} = doc ->
@@ -491,7 +496,7 @@ defmodule Liteskill.Rag do
       nil ->
         # Fallback for docs missing wiki_space_id metadata (pre-backfill data)
         from(d in Document,
-          where: fragment("? ->> 'wiki_document_id' = ?", d.metadata, ^wiki_document_id)
+          where: fragment("json_extract(?, '$.wiki_document_id') = ?", d.metadata, ^wiki_document_id)
         )
         |> Repo.one()
         |> resolve_wiki_acl(user_id)
@@ -504,10 +509,10 @@ defmodule Liteskill.Rag do
     case Repo.one(
            from(d in Document,
              where:
-               (fragment("? ->> 'wiki_document_id' = ?", d.metadata, ^document_id) or
-                  fragment("? ->> 'source_document_id' = ?", d.metadata, ^document_id)) and
+               (fragment("json_extract(?, '$.wiki_document_id') = ?", d.metadata, ^document_id) or
+                  fragment("json_extract(?, '$.source_document_id') = ?", d.metadata, ^document_id)) and
                  (d.user_id == ^user_id or
-                    fragment("(?->>'wiki_space_id')::uuid", d.metadata) in subquery(wiki_space_ids))
+                    fragment("json_extract(?, '$.wiki_space_id')", d.metadata) in subquery(wiki_space_ids))
            )
          ) do
       %Document{} = doc ->
@@ -517,8 +522,8 @@ defmodule Liteskill.Rag do
         # Fallback for docs missing wiki_space_id metadata (pre-backfill data)
         from(d in Document,
           where:
-            fragment("? ->> 'wiki_document_id' = ?", d.metadata, ^document_id) or
-              fragment("? ->> 'source_document_id' = ?", d.metadata, ^document_id)
+            fragment("json_extract(?, '$.wiki_document_id') = ?", d.metadata, ^document_id) or
+              fragment("json_extract(?, '$.source_document_id') = ?", d.metadata, ^document_id)
         )
         |> Repo.one()
         |> resolve_wiki_acl(user_id)
@@ -533,7 +538,7 @@ defmodule Liteskill.Rag do
              where:
                d.id == ^rag_document_id and
                  (d.user_id == ^user_id or
-                    fragment("(?->>'wiki_space_id')::uuid", d.metadata) in subquery(wiki_space_ids))
+                    fragment("json_extract(?, '$.wiki_space_id')", d.metadata) in subquery(wiki_space_ids))
            )
          ) do
       %Document{} ->
@@ -585,9 +590,9 @@ defmodule Liteskill.Rag do
     case Repo.one(
            from(d in Document,
              where:
-               fragment("? ->> 'source_document_id' = ?", d.metadata, ^source_document_id) and
+               fragment("json_extract(?, '$.source_document_id') = ?", d.metadata, ^source_document_id) and
                  (d.user_id == ^user_id or
-                    fragment("(?->>'wiki_space_id')::uuid", d.metadata) in subquery(wiki_space_ids))
+                    fragment("json_extract(?, '$.wiki_space_id')", d.metadata) in subquery(wiki_space_ids))
            )
          ) do
       %Document{} = doc ->
@@ -596,7 +601,7 @@ defmodule Liteskill.Rag do
       nil ->
         # Fallback for docs missing wiki_space_id metadata (pre-backfill data)
         from(d in Document,
-          where: fragment("? ->> 'source_document_id' = ?", d.metadata, ^source_document_id)
+          where: fragment("json_extract(?, '$.source_document_id') = ?", d.metadata, ^source_document_id)
         )
         |> Repo.one()
         |> resolve_wiki_acl(user_id)
@@ -675,67 +680,75 @@ defmodule Liteskill.Rag do
     end
   end
 
-  defp vector_search_all(user_id, query_embedding, limit) do
-    query_vector = Pgvector.new(query_embedding)
-    wiki_space_ids = Liteskill.Authorization.accessible_entity_ids("wiki_space", user_id)
-
-    Repo.all(
-      from(c in Chunk,
-        join: d in Document,
-        on: d.id == c.document_id,
-        join: s in Source,
-        on: s.id == d.source_id,
-        join: coll in Collection,
-        on: coll.id == s.collection_id,
-        where:
-          coll.user_id == ^user_id or fragment("(?->>'wiki_space_id')::uuid", d.metadata) in subquery(wiki_space_ids),
-        where: not is_nil(c.embedding),
-        order_by: fragment("embedding <=> ?", ^query_vector),
-        limit: ^limit,
-        select: %{chunk: c, distance: fragment("embedding <=> ?", ^query_vector)}
-      )
+  defp vector_search(collection_id, query_embedding, limit) do
+    from(c in Chunk,
+      join: d in Document,
+      on: d.id == c.document_id,
+      join: s in Source,
+      on: s.id == d.source_id,
+      where: s.collection_id == ^collection_id and not is_nil(c.embedding),
+      order_by: [asc: c.position],
+      select: c
     )
+    |> Repo.all()
+    |> cosine_search(query_embedding, limit)
   end
 
   defp vector_search_accessible(collection_id, user_id, query_embedding, limit) do
-    query_vector = Pgvector.new(query_embedding)
     wiki_space_ids = Liteskill.Authorization.accessible_entity_ids("wiki_space", user_id)
 
-    Repo.all(
-      from(c in Chunk,
-        join: d in Document,
-        on: d.id == c.document_id,
-        join: s in Source,
-        on: s.id == d.source_id,
-        join: coll in Collection,
-        on: coll.id == s.collection_id,
-        where: s.collection_id == ^collection_id,
-        where:
-          coll.user_id == ^user_id or fragment("(?->>'wiki_space_id')::uuid", d.metadata) in subquery(wiki_space_ids),
-        where: not is_nil(c.embedding),
-        order_by: fragment("embedding <=> ?", ^query_vector),
-        limit: ^limit,
-        select: %{chunk: c, distance: fragment("embedding <=> ?", ^query_vector)}
-      )
+    from(c in Chunk,
+      join: d in Document,
+      on: d.id == c.document_id,
+      join: s in Source,
+      on: s.id == d.source_id,
+      where:
+        s.collection_id == ^collection_id and
+          not is_nil(c.embedding) and
+          (d.user_id == ^user_id or
+             fragment("json_extract(?, '$.wiki_space_id')", d.metadata) in subquery(wiki_space_ids)),
+      order_by: [asc: c.position],
+      select: c
     )
+    |> Repo.all()
+    |> cosine_search(query_embedding, limit)
   end
 
-  defp vector_search(collection_id, query_embedding, limit) do
-    query_vector = Pgvector.new(query_embedding)
+  defp vector_search_all(user_id, query_embedding, limit) do
+    wiki_space_ids = Liteskill.Authorization.accessible_entity_ids("wiki_space", user_id)
 
-    Repo.all(
-      from(c in Chunk,
-        join: d in Document,
-        on: d.id == c.document_id,
-        join: s in Source,
-        on: s.id == d.source_id,
-        where: s.collection_id == ^collection_id,
-        where: not is_nil(c.embedding),
-        order_by: fragment("embedding <=> ?", ^query_vector),
-        limit: ^limit,
-        select: %{chunk: c, distance: fragment("embedding <=> ?", ^query_vector)}
-      )
+    from(c in Chunk,
+      join: d in Document,
+      on: d.id == c.document_id,
+      join: s in Source,
+      on: s.id == d.source_id,
+      join: coll in Collection,
+      on: coll.id == s.collection_id,
+      where:
+        not is_nil(c.embedding) and
+          (coll.user_id == ^user_id or
+             fragment("json_extract(?, '$.wiki_space_id')", d.metadata) in subquery(wiki_space_ids)),
+      order_by: [asc: c.position],
+      select: c
     )
+    |> Repo.all()
+    |> cosine_search(query_embedding, limit)
+  end
+
+  defp cosine_search(chunks, query_embedding, limit) do
+    chunks
+    |> Enum.map(fn chunk ->
+      stored = :erlang.binary_to_term(chunk.embedding, [:safe])
+      %{chunk: chunk, distance: l2_distance(query_embedding, stored)}
+    end)
+    |> Enum.sort_by(& &1.distance)
+    |> Enum.take(limit)
+  end
+
+  defp l2_distance(a, b) do
+    a
+    |> Enum.zip_reduce(b, 0.0, fn x, y, acc -> acc + (x - y) * (x - y) end)
+    |> :math.sqrt()
   end
 
   defp content_hash(content), do: :sha256 |> :crypto.hash(content) |> Base.encode16(case: :lower)

@@ -114,6 +114,8 @@ defmodule Liteskill.Teams do
       )
       |> Repo.insert()
     end
+  rescue
+    e in Ecto.ConstraintError -> {:error, e}
   end
 
   def remove_member(team_definition_id, agent_definition_id, user_id) do

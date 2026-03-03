@@ -1,5 +1,5 @@
 defmodule Liteskill.ReportsTest do
-  use Liteskill.DataCase, async: true
+  use Liteskill.DataCase, async: false
 
   alias Liteskill.Authorization.EntityAcl
   alias Liteskill.Reports

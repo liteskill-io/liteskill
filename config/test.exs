@@ -1,5 +1,7 @@
 import Config
 
+alias Ecto.Adapters.SQL.Sandbox
+
 # Fast Argon2 hashing for tests
 config :argon2_elixir, t_cost: 1, m_cost: 8
 
@@ -11,6 +13,14 @@ config :liteskill, Liteskill.Rag.EmbedQueue,
   backoff_ms: 1,
   flush_ms: 50
 
+config :liteskill, Liteskill.Repo,
+  database: Path.expand("../priv/liteskill_test#{System.get_env("MIX_TEST_PARTITION", "")}.db", __DIR__),
+  foreign_keys: :on,
+  journal_mode: :wal,
+  busy_timeout: 15_000,
+  pool: Sandbox,
+  pool_size: 5
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :liteskill, LiteskillWeb.Endpoint,
@@ -21,10 +31,13 @@ config :liteskill, LiteskillWeb.Endpoint,
 config :liteskill, Oban, testing: :manual
 
 # Ecto sandbox for Wallaby browser tests
-config :liteskill, :sandbox, Ecto.Adapters.SQL.Sandbox
+config :liteskill, :sandbox, Sandbox
 
 # Disable persistent_term cache for Settings (incompatible with Ecto sandbox)
 config :liteskill, :settings_cache, false
+
+# Tests run in multi-user mode by default; individual tests use Application.put_env to test single-user mode
+config :liteskill, :single_user_mode, false
 
 # Used by Application to skip ensure_admin_user Task (sandbox not available)
 config :liteskill, env: :test
@@ -47,6 +60,7 @@ config :phoenix_live_view,
 config :swoosh, :api_client, false
 
 # Wallaby E2E browser testing
+# CI: run Chrome headless with sandbox disabled (containerized environment)
 config :wallaby,
   driver: Wallaby.Chrome,
   otp_app: :liteskill,
@@ -54,7 +68,6 @@ config :wallaby,
   screenshot_dir: "tmp/wallaby_screenshots",
   js_errors: false
 
-# CI: run Chrome headless with sandbox disabled (containerized environment)
 if System.get_env("CI") do
   config :wallaby,
     chromedriver: [

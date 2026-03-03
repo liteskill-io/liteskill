@@ -11,7 +11,9 @@ defmodule LiteskillWeb.SettingsLiveTest do
             :settings_providers,
             :settings_models,
             :settings_rag,
-            :settings_account
+            :settings_account,
+            :settings_groups,
+            :settings_roles
           ] do
         assert SettingsLive.settings_action?(action), "expected #{action} to be a settings action"
       end
@@ -31,6 +33,8 @@ defmodule LiteskillWeb.SettingsLiveTest do
       assert SettingsLive.settings_to_admin_action(:settings_providers) == :admin_providers
       assert SettingsLive.settings_to_admin_action(:settings_models) == :admin_models
       assert SettingsLive.settings_to_admin_action(:settings_rag) == :admin_rag
+      assert SettingsLive.settings_to_admin_action(:settings_groups) == :admin_groups
+      assert SettingsLive.settings_to_admin_action(:settings_roles) == :admin_roles
     end
 
     test "returns nil for non-admin settings actions" do

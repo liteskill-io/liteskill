@@ -1,5 +1,5 @@
 defmodule LiteskillWeb.AuthControllerTest do
-  use LiteskillWeb.ConnCase, async: true
+  use LiteskillWeb.ConnCase, async: false
 
   alias Liteskill.Accounts
   alias Ueberauth.Auth.Extra

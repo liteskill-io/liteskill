@@ -1,5 +1,5 @@
 defmodule Liteskill.Aggregate.LoaderTest do
-  use Liteskill.DataCase, async: true
+  use Liteskill.DataCase, async: false
 
   alias Liteskill.Aggregate.Loader
   alias Liteskill.EventStore.Postgres, as: Store

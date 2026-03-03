@@ -1,5 +1,5 @@
 defmodule Liteskill.EventStore.PostgresTest do
-  use Liteskill.DataCase, async: true
+  use Liteskill.DataCase, async: false
 
   alias Liteskill.EventStore.Postgres
 

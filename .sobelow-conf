@@ -19,6 +19,11 @@
 
     # System.cmd in PostgresManager uses validated config-derived paths and a
     # regex-checked database name — no user-controlled command injection vector.
-    "CI.System"
+    "CI.System",
+
+    # binary_to_term in cosine_search deserializes float embeddings stored in the
+    # SQLite DB with the [:safe] option, which prevents atom creation and code loading.
+    # The data is internal (written by our own embedding pipeline), not user-supplied.
+    "Misc.BinToTerm"
   ]
 ]

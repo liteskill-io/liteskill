@@ -15,7 +15,7 @@ defmodule Liteskill.Chat.MessageChunk do
     field :content_block_index, :integer, default: 0
     field :delta_type, :string, default: "text_delta"
     field :delta_text, :string
-    field :inserted_at, :utc_datetime
+    field :inserted_at, :utc_datetime_usec, autogenerate: {DateTime, :utc_now, []}
 
     belongs_to :message, Liteskill.Chat.Message
   end

@@ -201,6 +201,16 @@ defmodule Liteskill.SettingsTest do
 
       assert {:error, _} = result
     end
+
+    test "returns error for changeset validation failure" do
+      # Ensure settings exists
+      _settings = Settings.get()
+
+      # nil registration_open fails validate_required, returning {:error, changeset}
+      result = Settings.update(%{registration_open: nil})
+
+      assert {:error, _} = result
+    end
   end
 
   defp create_embedding_model do

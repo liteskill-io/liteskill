@@ -10,6 +10,7 @@ defmodule Liteskill.Chat.Projector do
 
   import Ecto.Query
 
+  alias Ecto.Query.CastError
   alias Liteskill.Chat.Conversation
   alias Liteskill.Chat.Message
   alias Liteskill.Chat.MessageChunk
@@ -112,12 +113,11 @@ defmodule Liteskill.Chat.Projector do
     do_project_ordered(stream_id, rest, 0)
   rescue
     e in [
-      Postgrex.Error,
       DBConnection.ConnectionError,
       Ecto.ConstraintError,
       Ecto.StaleEntryError,
       Ecto.InvalidChangesetError,
-      Ecto.Query.CastError,
+      CastError,
       Ecto.ChangeError
     ] ->
       handle_projection_error(stream_id, event, rest, attempt, e)
@@ -191,7 +191,6 @@ defmodule Liteskill.Chat.Projector do
   end
 
   defp retryable_projection_error?(%DBConnection.ConnectionError{}), do: true
-  defp retryable_projection_error?(%Postgrex.Error{}), do: true
   defp retryable_projection_error?(_), do: false
 
   # coveralls-ignore-stop
@@ -266,20 +265,31 @@ defmodule Liteskill.Chat.Projector do
   end
 
   defp project_event(%Event{event_type: "AssistantChunkReceived", data: data}) do
-    case Repo.get(Message, data["message_id"]) do
-      nil ->
-        Logger.warning("Projector: message not found for chunk, skipping")
+    message_id = data["message_id"]
 
-      message ->
-        %MessageChunk{}
-        |> MessageChunk.changeset(%{
-          message_id: message.id,
-          chunk_index: data["chunk_index"],
-          content_block_index: data["content_block_index"] || 0,
-          delta_type: data["delta_type"] || "text_delta",
-          delta_text: data["delta_text"]
-        })
-        |> Repo.insert!()
+    case Ecto.UUID.dump(message_id) do
+      :error ->
+        raise CastError,
+          type: Ecto.UUID,
+          value: message_id,
+          message: "cannot cast #{inspect(message_id)} to :binary_id in AssistantChunkReceived"
+
+      {:ok, _} ->
+        case Repo.get(Message, message_id) do
+          nil ->
+            Logger.warning("Projector: message not found for chunk, skipping")
+
+          message ->
+            %MessageChunk{}
+            |> MessageChunk.changeset(%{
+              message_id: message.id,
+              chunk_index: data["chunk_index"],
+              content_block_index: data["content_block_index"] || 0,
+              delta_type: data["delta_type"] || "text_delta",
+              delta_text: data["delta_text"]
+            })
+            |> Repo.insert!()
+        end
     end
   end
 

@@ -27,8 +27,6 @@ defmodule Liteskill.Teams.TeamMember do
     |> validate_required([:team_definition_id, :agent_definition_id])
     |> foreign_key_constraint(:team_definition_id)
     |> foreign_key_constraint(:agent_definition_id)
-    |> unique_constraint([:team_definition_id, :agent_definition_id],
-      name: :team_members_unique_idx
-    )
+    |> unique_constraint([:team_definition_id, :agent_definition_id])
   end
 end

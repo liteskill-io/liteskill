@@ -407,16 +407,16 @@ defmodule Liteskill.Usage do
     UsageRecord
     |> apply_filters(opts)
     |> apply_time_filters(opts)
-    |> group_by([r], fragment("date_trunc('day', ?)", r.inserted_at))
+    |> group_by([r], fragment("strftime('%Y-%m-%d', ?)", r.inserted_at))
     |> select([r], %{
-      date: fragment("date_trunc('day', ?)", r.inserted_at),
+      date: fragment("strftime('%Y-%m-%d', ?)", r.inserted_at),
       total_tokens: coalesce(sum(r.total_tokens), 0),
       input_cost: sum(r.input_cost),
       output_cost: sum(r.output_cost),
       total_cost: sum(r.total_cost),
       call_count: count(r.id)
     })
-    |> order_by([r], asc: fragment("date_trunc('day', ?)", r.inserted_at))
+    |> order_by([r], asc: fragment("strftime('%Y-%m-%d', ?)", r.inserted_at))
     |> Repo.all()
   end
 
@@ -469,6 +469,7 @@ defmodule Liteskill.Usage do
         )
     })
     |> Repo.one()
+    |> normalize_embedding_cost()
   end
 
   @doc """
@@ -495,6 +496,7 @@ defmodule Liteskill.Usage do
     })
     |> order_by([r], desc: count(r.id))
     |> Repo.all()
+    |> Enum.map(&normalize_embedding_cost/1)
   end
 
   @doc """
@@ -521,13 +523,18 @@ defmodule Liteskill.Usage do
     })
     |> order_by([r], desc: coalesce(sum(r.token_count), 0))
     |> Repo.all()
+    |> Enum.map(&normalize_embedding_cost/1)
   end
+
+  # coveralls-ignore-next-line — nil guard for left-join result; in practice the join always matches
+  defp normalize_embedding_cost(nil), do: nil
+  defp normalize_embedding_cost(row), do: Map.update!(row, :estimated_cost, &CostCalculator.to_decimal/1)
 
   defp embedding_cost_subquery do
     from(m in LlmModel,
       where: m.model_type in ["embedding", "rerank"],
-      distinct: m.model_id,
-      select: %{model_id: m.model_id, input_cost_per_million: m.input_cost_per_million}
+      group_by: m.model_id,
+      select: %{model_id: m.model_id, input_cost_per_million: max(m.input_cost_per_million)}
     )
   end
 end

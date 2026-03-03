@@ -34,8 +34,7 @@ defmodule LiteskillWeb.ChatLive.ConversationsHandler do
     page_size = socket.assigns.conversations_page_size
     opts = if search_term == "", do: [], else: [search: search_term]
 
-    managed = Chat.list_conversations(user_id, [limit: page_size, offset: 0] ++ opts)
-    total = Chat.count_conversations(user_id, opts)
+    {managed, total} = list_and_count(socket, [limit: page_size, offset: 0] ++ opts, user_id)
 
     {:noreply,
      assign(socket,
@@ -55,7 +54,7 @@ defmodule LiteskillWeb.ChatLive.ConversationsHandler do
     opts = if search == "", do: [], else: [search: search]
 
     offset = (page - 1) * page_size
-    managed = Chat.list_conversations(user_id, [limit: page_size, offset: offset] ++ opts)
+    {managed, _} = list_and_count(socket, [limit: page_size, offset: offset] ++ opts, user_id)
 
     {:noreply,
      assign(socket,
@@ -103,7 +102,7 @@ defmodule LiteskillWeb.ChatLive.ConversationsHandler do
 
     {:ok, archived} = Chat.bulk_archive_conversations(ids, user_id)
 
-    conversations = Chat.list_conversations(user_id)
+    conversations = list_conversations(socket, user_id)
 
     socket =
       socket
@@ -138,7 +137,7 @@ defmodule LiteskillWeb.ChatLive.ConversationsHandler do
 
     case Chat.archive_conversation(id, user_id) do
       {:ok, _} ->
-        conversations = Chat.list_conversations(user_id)
+        conversations = list_conversations(socket, user_id)
         socket = assign(socket, conversations: conversations, confirm_delete_id: nil)
 
         if socket.assigns.live_action == :conversations do
@@ -162,12 +161,25 @@ defmodule LiteskillWeb.ChatLive.ConversationsHandler do
     opts = if search == "", do: [], else: [search: search]
 
     offset = (socket.assigns.conversations_page - 1) * page_size
-    managed = Chat.list_conversations(user_id, [limit: page_size, offset: offset] ++ opts)
-    total = Chat.count_conversations(user_id, opts)
+    {managed, total} = list_and_count(socket, [limit: page_size, offset: offset] ++ opts, user_id)
 
     assign(socket,
       managed_conversations: managed,
       conversations_total: total
     )
+  end
+
+  defp list_conversations(socket, user_id) do
+    if socket.assigns.single_user_mode,
+      do: Chat.list_all_conversations(),
+      else: Chat.list_conversations(user_id)
+  end
+
+  defp list_and_count(socket, opts, user_id) do
+    if socket.assigns.single_user_mode do
+      {Chat.list_all_conversations(opts), Chat.count_all_conversations(opts)}
+    else
+      {Chat.list_conversations(user_id, opts), Chat.count_conversations(user_id, opts)}
+    end
   end
 end

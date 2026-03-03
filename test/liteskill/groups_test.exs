@@ -1,5 +1,5 @@
 defmodule Liteskill.GroupsTest do
-  use Liteskill.DataCase, async: true
+  use Liteskill.DataCase, async: false
 
   alias Liteskill.Groups
   alias Liteskill.Groups.GroupMembership

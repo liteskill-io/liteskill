@@ -160,7 +160,6 @@ defmodule Liteskill.Chat.StreamRegistry do
           # coveralls-ignore-start — rescue runs inside async Task.Supervisor child
           e in [
             Ecto.NoResultsError,
-            Postgrex.Error,
             DBConnection.ConnectionError,
             Ecto.ConstraintError,
             Ecto.StaleEntryError,

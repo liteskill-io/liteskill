@@ -256,6 +256,51 @@ defmodule Liteskill.ChatTest do
     end
   end
 
+  describe "list_all_conversations/1" do
+    test "lists conversations from all users", %{user: user, other_user: other} do
+      {:ok, _} = Chat.create_conversation(%{user_id: user.id, title: "User Chat"})
+      {:ok, _} = Chat.create_conversation(%{user_id: other.id, title: "Other Chat"})
+
+      assert length(Chat.list_all_conversations()) == 2
+    end
+
+    test "excludes archived conversations", %{user: user} do
+      {:ok, conv} = Chat.create_conversation(%{user_id: user.id, title: "Archived"})
+      {:ok, _} = Chat.create_conversation(%{user_id: user.id, title: "Active"})
+      {:ok, _} = Chat.archive_conversation(conv.id, user.id)
+
+      assert length(Chat.list_all_conversations()) == 1
+    end
+
+    test "supports limit, offset, and search", %{user: user} do
+      for i <- 1..3, do: Chat.create_conversation(%{user_id: user.id, title: "Chat #{i}"})
+
+      assert length(Chat.list_all_conversations(limit: 2)) == 2
+      assert length(Chat.list_all_conversations(limit: 2, offset: 2)) == 1
+      assert length(Chat.list_all_conversations(search: "Chat 1")) == 1
+      assert Chat.list_all_conversations(search: "nonexistent") == []
+    end
+  end
+
+  describe "count_all_conversations/1" do
+    test "counts conversations from all users", %{user: user, other_user: other} do
+      {:ok, _} = Chat.create_conversation(%{user_id: user.id, title: "User Chat"})
+      {:ok, _} = Chat.create_conversation(%{user_id: other.id, title: "Other Chat"})
+
+      assert Chat.count_all_conversations() == 2
+    end
+
+    test "excludes archived and respects search", %{user: user} do
+      {:ok, conv} = Chat.create_conversation(%{user_id: user.id, title: "Archived"})
+      {:ok, _} = Chat.create_conversation(%{user_id: user.id, title: "Active Alpha"})
+      {:ok, _} = Chat.archive_conversation(conv.id, user.id)
+
+      assert Chat.count_all_conversations() == 1
+      assert Chat.count_all_conversations(search: "Alpha") == 1
+      assert Chat.count_all_conversations(search: "nonexistent") == 0
+    end
+  end
+
   describe "bulk_archive_conversations/2" do
     test "archives multiple conversations", %{user: user} do
       {:ok, c1} = Chat.create_conversation(%{user_id: user.id, title: "Chat 1"})

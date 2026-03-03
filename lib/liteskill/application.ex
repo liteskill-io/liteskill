@@ -16,7 +16,6 @@ defmodule Liteskill.Application do
       Enum.reject(
         [
           LiteskillWeb.Telemetry,
-          if(desktop_mode?(), do: Liteskill.Desktop.PostgresManager),
           Liteskill.Repo,
           {DNSCluster, query: Application.get_env(:liteskill, :dns_cluster_query) || :ignore},
           {Phoenix.PubSub, name: Liteskill.PubSub},
@@ -70,6 +69,5 @@ defmodule Liteskill.Application do
   end
 
   defp test_env?, do: Application.get_env(:liteskill, :env) == :test
-  defp desktop_mode?, do: Application.get_env(:liteskill, :desktop_mode, false)
   defp saml_configured?, do: Application.get_env(:liteskill, :saml_configured, false)
 end

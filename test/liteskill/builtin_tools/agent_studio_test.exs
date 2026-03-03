@@ -1,5 +1,5 @@
 defmodule Liteskill.BuiltinTools.AgentStudioTest do
-  use Liteskill.DataCase, async: true
+  use Liteskill.DataCase, async: false
 
   alias Liteskill.BuiltinTools.AgentStudio, as: AgentStudioTool
 

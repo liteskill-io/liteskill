@@ -17,20 +17,6 @@ defmodule Liteskill.DesktopTest do
     end
   end
 
-  describe "pg_data_dir/0" do
-    test "is a subdirectory of data_dir" do
-      assert String.starts_with?(Desktop.pg_data_dir(), Desktop.data_dir())
-      assert String.ends_with?(Desktop.pg_data_dir(), "pg_data")
-    end
-  end
-
-  describe "socket_dir/0" do
-    test "is a subdirectory of data_dir" do
-      assert String.starts_with?(Desktop.socket_dir(), Desktop.data_dir())
-      assert String.ends_with?(Desktop.socket_dir(), "pg_socket")
-    end
-  end
-
   describe "arch_triple/0" do
     test "returns a valid triple with at least 3 segments" do
       triple = Desktop.arch_triple()
@@ -50,18 +36,6 @@ defmodule Liteskill.DesktopTest do
     test "returns a boolean" do
       result = Desktop.windows?()
       assert is_boolean(result)
-    end
-  end
-
-  describe "pg_port/0" do
-    test "returns a positive integer" do
-      port = Desktop.pg_port()
-      assert is_integer(port)
-      assert port > 0
-    end
-
-    test "defaults to 15432" do
-      assert Desktop.pg_port() == 15_432
     end
   end
 

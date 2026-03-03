@@ -1,5 +1,5 @@
 defmodule Liteskill.BuiltinTools.ReportsTest do
-  use Liteskill.DataCase, async: true
+  use Liteskill.DataCase, async: false
 
   alias Liteskill.BuiltinTools.Reports, as: ReportsTool
   alias Liteskill.Reports.Report

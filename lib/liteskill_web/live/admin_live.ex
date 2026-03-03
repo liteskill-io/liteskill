@@ -292,7 +292,6 @@ defmodule LiteskillWeb.AdminLive do
             active={@live_action == :admin_users}
           />
           <.tab_link
-            :if={!@single_user_mode}
             label="Groups"
             to={~p"/admin/groups"}
             active={@live_action == :admin_groups}

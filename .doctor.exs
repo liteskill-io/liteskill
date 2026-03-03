@@ -9,9 +9,7 @@
     Liteskill.Repo,
     Liteskill.Mailer,
     # Inspect protocol implementations
-    ~r/^Inspect\./,
-    # Postgrex generated types
-    ~r/^Liteskill\.Repo\.PostgrexTypes/
+    ~r/^Inspect\./
   ],
   ignore_paths: [
     ~r"lib/mix/",

@@ -15,7 +15,9 @@ defmodule LiteskillWeb.SettingsLive do
     :settings_providers,
     :settings_models,
     :settings_rag,
-    :settings_account
+    :settings_account,
+    :settings_groups,
+    :settings_roles
   ]
 
   @doc "Returns true when the given action is a settings action."
@@ -27,6 +29,8 @@ defmodule LiteskillWeb.SettingsLive do
   def settings_to_admin_action(:settings_providers), do: :admin_providers
   def settings_to_admin_action(:settings_models), do: :admin_models
   def settings_to_admin_action(:settings_rag), do: :admin_rag
+  def settings_to_admin_action(:settings_groups), do: :admin_groups
+  def settings_to_admin_action(:settings_roles), do: :admin_roles
   def settings_to_admin_action(_), do: nil
 
   attr :active, :atom, required: true
@@ -44,6 +48,8 @@ defmodule LiteskillWeb.SettingsLive do
       <.tab_link label="Models" to={~p"/settings/models"} active={@active == :settings_models} />
       <.tab_link label="RAG" to={~p"/settings/rag"} active={@active == :settings_rag} />
       <.tab_link label="Account" to={~p"/settings/account"} active={@active == :settings_account} />
+      <.tab_link label="Groups" to={~p"/settings/groups"} active={@active == :settings_groups} />
+      <.tab_link label="Roles" to={~p"/settings/roles"} active={@active == :settings_roles} />
     </div>
     """
   end

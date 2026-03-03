@@ -224,7 +224,6 @@ defmodule Liteskill.Runs.Runner do
           KeyError,
           MatchError,
           FunctionClauseError,
-          Postgrex.Error,
           DBConnection.ConnectionError,
           Ecto.QueryError,
           Ecto.ConstraintError,
@@ -452,7 +451,7 @@ defmodule Liteskill.Runs.Runner do
     })
   rescue
     # coveralls-ignore-start
-    e in [Postgrex.Error, DBConnection.ConnectionError, Ecto.StaleEntryError] ->
+    e in [DBConnection.ConnectionError, Ecto.StaleEntryError] ->
       Logger.error("Failed to update run #{run_id} after #{step}: #{Exception.message(e)}")
       {:error, :update_failed}
       # coveralls-ignore-stop

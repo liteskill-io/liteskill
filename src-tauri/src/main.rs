@@ -158,15 +158,20 @@ fn main() {
         }
     }
 
+    // generate_context! emits a global static symbol (_EMBED_INFO_PLIST) and
+    // must be called exactly once per binary. Calling it inside both
+    // run_dev_mode and run_production_mode causes a duplicate-symbol linker
+    // error because both functions are compiled regardless of which branch runs.
+    let context = tauri::generate_context!();
     if dev_mode() {
-        run_dev_mode();
+        run_dev_mode(context);
     } else {
-        run_production_mode();
+        run_production_mode(context);
     }
 }
 
 /// Dev mode: no sidecar, just a window pointed at localhost:4000.
-fn run_dev_mode() {
+fn run_dev_mode(context: tauri::Context<tauri::Wry>) {
     let port: u16 = std::env::var("LITESKILL_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -207,12 +212,12 @@ fn run_dev_mode() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }
 
 /// Production mode: start the Burrito sidecar, wait for it, open a window.
-fn run_production_mode() {
+fn run_production_mode(context: tauri::Context<tauri::Wry>) {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -322,7 +327,7 @@ fn run_production_mode() {
                 kill_sidecar(&window.app_handle());
             }
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {

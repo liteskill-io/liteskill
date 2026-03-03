@@ -3,10 +3,10 @@ defmodule Liteskill.Desktop do
   Boundary module for desktop-mode functionality.
 
   Provides platform-specific path helpers and configuration persistence
-  for the Tauri desktop app with bundled PostgreSQL.
+  for the Tauri desktop app with SQLite database.
   """
 
-  use Boundary, top_level?: true, deps: [], exports: [PostgresManager]
+  use Boundary, top_level?: true, deps: [], exports: []
 
   @doc "Returns true when running in desktop mode."
   @spec enabled?() :: boolean()
@@ -20,50 +20,9 @@ defmodule Liteskill.Desktop do
     Application.get_env(:liteskill, :desktop_data_dir) || default_data_dir()
   end
 
-  @doc "Returns the PostgreSQL data directory."
-  @spec pg_data_dir() :: String.t()
-  def pg_data_dir, do: Path.join(data_dir(), "pg_data")
-
   @doc "Returns true when running on Windows."
   @spec windows?() :: boolean()
   def windows?, do: match?({:win32, _}, :os.type())
-
-  @doc "Returns the PostgreSQL TCP port for Windows desktop mode."
-  @spec pg_port() :: pos_integer()
-  def pg_port, do: Application.get_env(:liteskill, :desktop_pg_port, 15_432)
-
-  @doc "Returns the PostgreSQL Unix socket directory."
-  @spec socket_dir() :: String.t()
-  def socket_dir, do: Path.join(data_dir(), "pg_socket")
-
-  @doc "Returns the path to bundled PostgreSQL binaries for the current architecture."
-  @spec pg_bin_dir() :: String.t()
-  # coveralls-ignore-start
-  def pg_bin_dir do
-    Application.app_dir(:liteskill, Path.join(["priv/postgres", arch_triple(), "bin"]))
-  end
-
-  # coveralls-ignore-stop
-
-  @doc "Returns the path to bundled PostgreSQL share directory (for initdb -L)."
-  @spec pg_share_dir() :: String.t()
-  # coveralls-ignore-start
-  def pg_share_dir do
-    # Linux/macOS: compiled-in SHAREDIR offset is ../share/postgresql (standard --prefix layout).
-    # Windows (EDB): compiled-in SHAREDIR offset is ../share (flat layout, no nesting).
-    share_subpath =
-      case :os.type() do
-        {:win32, _} -> "share"
-        _ -> Path.join("share", "postgresql")
-      end
-
-    Application.app_dir(
-      :liteskill,
-      Path.join(["priv/postgres", arch_triple(), share_subpath])
-    )
-  end
-
-  # coveralls-ignore-stop
 
   @doc "Returns the architecture triple string for the current platform."
   @spec arch_triple() :: String.t()

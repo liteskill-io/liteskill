@@ -340,7 +340,12 @@ defmodule Liteskill.DataSources do
       |> String.replace("_", "\\_")
 
     term = "%#{escaped}%"
-    where(query, [d], ilike(d.title, ^term) or ilike(d.content, ^term))
+
+    where(
+      query,
+      [d],
+      fragment("? LIKE ? ESCAPE '\\'", d.title, ^term) or fragment("? LIKE ? ESCAPE '\\'", d.content, ^term)
+    )
   end
 
   defp maybe_filter_parent(query, :unset), do: query

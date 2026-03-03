@@ -5,6 +5,20 @@ node = "24"
 mdbook = "latest"
 zig = "0.15.2"
 
+[tasks.dev]
+description = "Start Phoenix dev server + Tauri window (live reload, no sidecar)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+mix phx.server &
+PHX_PID=$!
+trap 'kill "$PHX_PID" 2>/dev/null; wait "$PHX_PID" 2>/dev/null' EXIT INT TERM
+
+cd src-tauri
+LITESKILL_DEV=true cargo tauri dev --config '{"bundle":{"externalBin":[]}}'
+"""
+
 [tasks.singleuser]
 description = "Start Phoenix dev server in single-user mode"
 run = "SINGLE_USER_MODE=true mix phx.server"
@@ -12,7 +26,7 @@ run = "SINGLE_USER_MODE=true mix phx.server"
 [tasks.local-tauri]
 description = "Open a Tauri dev window pointed at localhost:4000 (no sidecar)"
 dir = "src-tauri"
-run = "LITESKILL_DEV=true cargo tauri dev"
+run = "LITESKILL_DEV=true cargo tauri dev --config '{\"bundle\":{\"externalBin\":[]}}'"
 
 [tasks.linux-appimage]
 description = "Build Linux x86_64 AppImage via Docker (full CI-equivalent build)"

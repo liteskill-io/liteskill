@@ -1,5 +1,5 @@
 defmodule Liteskill.Rag.ChunksAndEmbeddingsTest do
-  use Liteskill.DataCase, async: true
+  use Liteskill.DataCase, async: false
 
   import Liteskill.RagTestHelpers
 
@@ -206,7 +206,7 @@ defmodule Liteskill.Rag.ChunksAndEmbeddingsTest do
       {:ok, source} = create_source(coll.id, owner.id)
       {:ok, doc} = create_document(source.id, owner.id, %{title: "Embedded"})
 
-      embedding = Pgvector.new(List.duplicate(0.1, 1024))
+      embedding = :erlang.term_to_binary(List.duplicate(0.1, 1024))
 
       chunk =
         insert_chunk(doc.id, 0, embedding: embedding)
@@ -233,7 +233,7 @@ defmodule Liteskill.Rag.ChunksAndEmbeddingsTest do
       {:ok, source} = create_source(coll.id, owner.id)
       {:ok, doc} = create_document(source.id, owner.id, %{title: "Mixed"})
 
-      embedding = Pgvector.new(List.duplicate(0.1, 1024))
+      embedding = :erlang.term_to_binary(List.duplicate(0.1, 1024))
       insert_chunk(doc.id, 0, embedding: embedding)
       insert_chunk(doc.id, 1)
 

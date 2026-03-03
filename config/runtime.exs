@@ -102,9 +102,10 @@ if bedrock_overrides != [] do
   config :liteskill, Liteskill.LLM, Keyword.merge(existing, bedrock_overrides)
 end
 
-# Single-user mode (desktop / self-hosted)
-if System.get_env("SINGLE_USER_MODE") in ~w(true 1 yes) do
-  config :liteskill, :single_user_mode, true
+# Single-user mode is the default. Set MULTI_USER_MODE=true to enable multi-user web platform mode.
+# Not applied in :test env so config/test.exs retains control.
+if config_env() != :test do
+  config :liteskill, :single_user_mode, System.get_env("MULTI_USER_MODE") not in ~w(true 1 yes)
 end
 
 # Server-side session timeouts (seconds)
@@ -169,22 +170,14 @@ if System.get_env("LITESKILL_DESKTOP") == "true" do
     config :liteskill, :encryption_key, encryption_key
   end
 
-  repo_opts =
-    case :os.type() do
-      {:win32, _} ->
-        pg_port = String.to_integer(System.get_env("LITESKILL_PG_PORT", "15432"))
-        config :liteskill, :desktop_pg_port, pg_port
-
-        [database: "liteskill_desktop", hostname: "localhost", port: pg_port, pool_size: 5]
-
-      _ ->
-        socket_dir = Path.join(desktop_data_dir, "pg_socket")
-        [database: "liteskill_desktop", socket_dir: socket_dir, pool_size: 5]
-    end
-
   port = String.to_integer(System.get_env("PORT", "4000"))
+  db_path = Path.join(desktop_data_dir, "liteskill.db")
 
-  config :liteskill, Liteskill.Repo, repo_opts
+  config :liteskill, Liteskill.Repo,
+    database: db_path,
+    foreign_keys: :on,
+    journal_mode: :wal,
+    pool_size: 5
 
   config :liteskill, LiteskillWeb.Endpoint,
     url: [host: "localhost", port: port, scheme: "http"],
@@ -196,31 +189,15 @@ if System.get_env("LITESKILL_DESKTOP") == "true" do
   config :liteskill, :dns_cluster_query, nil
 end
 
-if config_env() == :test do
-  database_url =
-    System.get_env("DATABASE_URL") ||
-      "ecto://liteskill:liteskill@localhost/liteskill_test#{System.get_env("MIX_TEST_PARTITION", "")}"
-
-  config :liteskill, Liteskill.Repo,
-    url: database_url,
-    pool: Ecto.Adapters.SQL.Sandbox,
-    pool_size: System.schedulers_online() * 2
-end
-
 if config_env() == :prod and System.get_env("LITESKILL_DESKTOP") != "true" do
-  database_url =
-    System.get_env("DATABASE_URL") ||
+  database_path =
+    System.get_env("DATABASE_PATH") ||
       raise """
-      environment variable DATABASE_URL is missing.
-      For example: ecto://USER:PASS@HOST/DATABASE
+      environment variable DATABASE_PATH is missing.
+      Set it to the path for the SQLite database file, e.g. /var/lib/liteskill/liteskill.db
       """
 
-  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
-
   # --- Auto-generate secret_key_base ---
-  # Priority: env var → secrets file → generate & persist.
-  # NOTE: This logic is intentionally inline because runtime.exs executes
-  # before application code is available in releases.
   secrets_dir =
     if secrets_file = System.get_env("LITESKILL_SECRETS_FILE") do
       Path.dirname(secrets_file)
@@ -273,73 +250,15 @@ if config_env() == :prod and System.get_env("LITESKILL_DESKTOP") != "true" do
   host = System.get_env("PHX_HOST") || "example.com"
 
   config :liteskill, Liteskill.Repo,
-    # ssl: true,
-    url: database_url,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-    # For machines with several cores, consider starting multiple pools of `pool_size`
-    # pool_count: 4,
-    socket_options: maybe_ipv6
+    database: database_path,
+    foreign_keys: :on,
+    journal_mode: :wal,
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5")
 
   config :liteskill, LiteskillWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
-    http: [
-      # Enable IPv6 and bind on all interfaces.
-      # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
-      # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
-      # for details about using IPv6 vs IPv4 and loopback vs public addresses.
-      ip: {0, 0, 0, 0, 0, 0, 0, 0}
-    ],
+    http: [ip: {0, 0, 0, 0, 0, 0, 0, 0}],
     secret_key_base: secret_key_base
 
   config :liteskill, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
-
-  # ## SSL Support
-  #
-  # To get SSL working, you will need to add the `https` key
-  # to your endpoint configuration:
-  #
-  #     config :liteskill, LiteskillWeb.Endpoint,
-  #       https: [
-  #         ...,
-  #         port: 443,
-  #         cipher_suite: :strong,
-  #         keyfile: System.get_env("SOME_APP_SSL_KEY_PATH"),
-  #         certfile: System.get_env("SOME_APP_SSL_CERT_PATH")
-  #       ]
-  #
-  # The `cipher_suite` is set to `:strong` to support only the
-  # latest and more secure SSL ciphers. This means old browsers
-  # and clients may not be supported. You can set it to
-  # `:compatible` for wider support.
-  #
-  # `:keyfile` and `:certfile` expect an absolute path to the key
-  # and cert in disk or a relative path inside priv, for example
-  # "priv/ssl/server.key". For all supported SSL configuration
-  # options, see https://hexdocs.pm/plug/Plug.SSL.html#configure/1
-  #
-  # We also recommend setting `force_ssl` in your config/prod.exs,
-  # ensuring no data is ever sent via http, always redirecting to https:
-  #
-  #     config :liteskill, LiteskillWeb.Endpoint,
-  #       force_ssl: [hsts: true]
-  #
-  # Check `Plug.SSL` for all available options in `force_ssl`.
-
-  # ## Configuring the mailer
-  #
-  # In production you need to configure the mailer to use a different adapter.
-  # Here is an example configuration for Mailgun:
-  #
-  #     config :liteskill, Liteskill.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # Most non-SMTP adapters require an API client. Swoosh supports Req, Hackney,
-  # and Finch out-of-the-box. This configuration is typically done at
-  # compile-time in your config/prod.exs:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Req
-  #
-  # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 end

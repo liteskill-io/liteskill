@@ -1,6 +1,6 @@
 defmodule Liteskill.Rag.Chunk do
   @moduledoc """
-  Schema for RAG chunks with pgvector embeddings.
+  Schema for RAG chunks. Embeddings stored as binary blobs; vector search is stubbed.
   """
 
   use Ecto.Schema
@@ -16,7 +16,8 @@ defmodule Liteskill.Rag.Chunk do
     field :metadata, :map, default: %{}
     field :token_count, :integer
     field :content_hash, :string
-    field :embedding, Pgvector.Ecto.Vector
+    # Vector search is stubbed — embedding stored as binary blob for future use
+    field :embedding, :binary
 
     belongs_to :document, Liteskill.Rag.Document
 

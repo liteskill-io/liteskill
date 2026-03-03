@@ -376,7 +376,7 @@ defmodule LiteskillWeb.AdminLive.UsageTab do
         0.0
       end
 
-    avg_ms = trunc(Decimal.to_float(assigns.totals.avg_latency_ms))
+    avg_ms = trunc(to_float(assigns.totals.avg_latency_ms))
     assigns = assign(assigns, error_rate: error_rate, avg_ms: avg_ms)
 
     ~H"""
@@ -422,7 +422,7 @@ defmodule LiteskillWeb.AdminLive.UsageTab do
                 <td class="text-right">{format_number(row.total_inputs)}</td>
                 <td class="text-right">{format_cost(row.estimated_cost)}</td>
                 <td class="text-right">{row.error_count}</td>
-                <td class="text-right">{trunc(Decimal.to_float(row.avg_latency_ms))}ms</td>
+                <td class="text-right">{trunc(to_float(row.avg_latency_ms))}ms</td>
               </tr>
             </tbody>
           </table>
@@ -460,7 +460,7 @@ defmodule LiteskillWeb.AdminLive.UsageTab do
                 <td class="text-right">{format_number(row.total_inputs)}</td>
                 <td class="text-right">{format_cost(row.estimated_cost)}</td>
                 <td class="text-right">{row.error_count}</td>
-                <td class="text-right">{trunc(Decimal.to_float(row.avg_latency_ms))}ms</td>
+                <td class="text-right">{trunc(to_float(row.avg_latency_ms))}ms</td>
               </tr>
             </tbody>
           </table>
@@ -469,6 +469,9 @@ defmodule LiteskillWeb.AdminLive.UsageTab do
     </div>
     """
   end
+
+  defp to_float(%Decimal{} = d), do: Decimal.to_float(d)
+  defp to_float(n) when is_number(n), do: n * 1.0
 
   defp bar_width(_tokens, []), do: 0
 

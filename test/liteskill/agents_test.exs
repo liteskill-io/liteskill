@@ -1,5 +1,5 @@
 defmodule Liteskill.AgentsTest do
-  use Liteskill.DataCase, async: true
+  use Liteskill.DataCase, async: false
 
   alias Liteskill.Agents
   alias Liteskill.Agents.AgentDefinition

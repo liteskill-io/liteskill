@@ -1,5 +1,5 @@
 defmodule LiteskillWeb.PasswordAuthControllerTest do
-  use LiteskillWeb.ConnCase, async: true
+  use LiteskillWeb.ConnCase, async: false
 
   @valid_attrs %{
     "email" => "newuser@example.com",

@@ -26,10 +26,20 @@ defmodule LiteskillWeb.ChatLive do
     user = socket.assigns.current_user
     auto_confirm_tools = get_in(user.preferences, ["auto_confirm_tools"]) != false
 
+    single_user = Liteskill.SingleUser.enabled?()
+
     {conversations, available_llm_models, selected_llm_model_id, selected_server_ids, has_admin_access} =
       if connected?(socket) do
-        convs = Chat.list_conversations(user.id)
-        models = Liteskill.LlmModels.list_active_models(user.id, model_type: "inference")
+        convs =
+          if single_user,
+            do: Chat.list_all_conversations(),
+            else: Chat.list_conversations(user.id)
+
+        models =
+          if single_user,
+            do: Liteskill.LlmModels.list_all_active_models(model_type: "inference"),
+            else: Liteskill.LlmModels.list_active_models(user.id, model_type: "inference")
+
         preferred_id = get_in(user.preferences, ["preferred_llm_model_id"])
         server_ids = McpServers.load_selected_server_ids(user.id)
 

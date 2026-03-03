@@ -1,5 +1,5 @@
 defmodule LiteskillWeb.Plugs.AuthTest do
-  use LiteskillWeb.ConnCase, async: true
+  use LiteskillWeb.ConnCase, async: false
 
   alias LiteskillWeb.Plugs.Auth
 

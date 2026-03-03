@@ -68,6 +68,8 @@ defmodule Liteskill.Settings do
       error ->
         error
     end
+  rescue
+    e in Ecto.ConstraintError -> {:error, e}
   end
 
   def toggle_registration do

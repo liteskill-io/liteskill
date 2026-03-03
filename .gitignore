@@ -70,3 +70,8 @@ npm-debug.log
 
 # mac
 .DS_Store
+
+# databases
+*.db
+*.db-*
+

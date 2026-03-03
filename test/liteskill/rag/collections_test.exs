@@ -1,5 +1,5 @@
 defmodule Liteskill.Rag.CollectionsTest do
-  use Liteskill.DataCase, async: true
+  use Liteskill.DataCase, async: false
 
   import Liteskill.RagTestHelpers
   import Liteskill.RetryTestHelpers

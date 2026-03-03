@@ -134,7 +134,7 @@ defmodule Liteskill.Accounts do
 
     base =
       User
-      |> where([u], ilike(u.email, ^term) or ilike(u.name, ^term))
+      |> where([u], like(u.email, ^term) or like(u.name, ^term))
       |> limit(^limit)
       |> order_by([u], asc: u.email)
 
@@ -242,12 +242,10 @@ defmodule Liteskill.Accounts do
   """
   def accept_invitation(token, attrs) do
     Repo.transaction(fn ->
-      # Lock the invitation row to prevent concurrent acceptance
       invitation =
         Repo.one(
           from i in Invitation,
-            where: i.token == ^token,
-            lock: "FOR UPDATE"
+            where: i.token == ^token
         )
 
       case invitation do

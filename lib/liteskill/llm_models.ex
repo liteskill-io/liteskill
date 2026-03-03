@@ -34,6 +34,8 @@ defmodule Liteskill.LlmModels do
           {:error, changeset}
       end
     end
+  rescue
+    e in Ecto.ConstraintError -> {:error, e}
   end
 
   def update_model(id, user_id, attrs) do

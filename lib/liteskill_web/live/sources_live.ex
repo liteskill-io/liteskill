@@ -757,7 +757,6 @@ defmodule LiteskillWeb.SourcesLive do
             end
           rescue
             e in [
-              Postgrex.Error,
               DBConnection.ConnectionError,
               Ecto.QueryError,
               RuntimeError,

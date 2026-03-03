@@ -261,6 +261,26 @@ defmodule Liteskill.Chat do
     |> Repo.aggregate(:count)
   end
 
+  @doc "Lists all non-archived conversations regardless of owner. No auth — for single-user mode."
+  def list_all_conversations(opts \\ []) do
+    limit = Keyword.get(opts, :limit, 20)
+    offset = Keyword.get(opts, :offset, 0)
+
+    opts
+    |> all_conversations_query()
+    |> order_by([c], desc: c.updated_at)
+    |> limit(^limit)
+    |> offset(^offset)
+    |> Repo.all()
+  end
+
+  @doc "Counts all non-archived conversations regardless of owner. No auth — for single-user mode."
+  def count_all_conversations(opts \\ []) do
+    opts
+    |> all_conversations_query()
+    |> Repo.aggregate(:count)
+  end
+
   def bulk_archive_conversations([], _user_id), do: {:ok, 0}
 
   def bulk_archive_conversations(conversation_ids, user_id) do
@@ -497,25 +517,33 @@ defmodule Liteskill.Chat do
   end
 
   defp accessible_conversations_query(user_id, opts) do
-    search = Keyword.get(opts, :search)
     accessible_ids = Authorization.accessible_entity_ids("conversation", user_id)
 
-    query =
-      Conversation
-      |> where([c], c.user_id == ^user_id or c.id in subquery(accessible_ids))
-      |> where([c], c.status != "archived")
+    Conversation
+    |> where([c], c.user_id == ^user_id or c.id in subquery(accessible_ids))
+    |> where([c], c.status != "archived")
+    |> apply_conversation_search(opts)
+  end
 
-    if search && search != "" do
-      escaped =
-        search
-        |> String.replace("\\", "\\\\")
-        |> String.replace("%", "\\%")
-        |> String.replace("_", "\\_")
+  defp all_conversations_query(opts) do
+    Conversation
+    |> where([c], c.status != "archived")
+    |> apply_conversation_search(opts)
+  end
 
-      term = "%#{escaped}%"
-      where(query, [c], ilike(c.title, ^term))
-    else
-      query
+  defp apply_conversation_search(query, opts) do
+    case Keyword.get(opts, :search) do
+      search when is_binary(search) and search != "" ->
+        escaped =
+          search
+          |> String.replace("\\", "\\\\")
+          |> String.replace("%", "\\%")
+          |> String.replace("_", "\\_")
+
+        where(query, [c], fragment("? LIKE ? ESCAPE '\\'", c.title, ^"%#{escaped}%"))
+
+      _ ->
+        query
     end
   end
 

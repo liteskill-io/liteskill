@@ -50,15 +50,9 @@ defmodule Liteskill.Authorization.EntityAcl do
     |> validate_inclusion(:entity_type, @valid_entity_types)
     |> validate_inclusion(:role, @valid_roles)
     |> validate_exactly_one_grantee()
-    |> unique_constraint([:entity_type, :entity_id, :user_id],
-      name: :entity_acls_entity_user_idx
-    )
-    |> unique_constraint([:entity_type, :entity_id, :group_id],
-      name: :entity_acls_entity_group_idx
-    )
-    |> unique_constraint([:entity_type, :entity_id, :agent_definition_id],
-      name: :entity_acls_entity_agent_idx
-    )
+    |> unique_constraint([:entity_type, :entity_id, :user_id])
+    |> unique_constraint([:entity_type, :entity_id, :group_id])
+    |> unique_constraint([:entity_type, :entity_id, :agent_definition_id])
     |> check_constraint(:user_id, name: :entity_acl_exactly_one_grantee)
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:group_id)

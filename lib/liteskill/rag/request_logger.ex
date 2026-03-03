@@ -30,8 +30,8 @@ defmodule Liteskill.Rag.RequestLogger do
     rescue
       # coveralls-ignore-start
       _e in [
-        Postgrex.Error,
         DBConnection.ConnectionError,
+        Ecto.ConstraintError,
         Ecto.InvalidChangesetError,
         Ecto.ChangeError
       ] ->

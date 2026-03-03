@@ -102,6 +102,8 @@ defmodule LiteskillWeb.Router do
       live "/settings/models", AdminLive, :settings_models
       live "/settings/rag", AdminLive, :settings_rag
       live "/settings/account", AdminLive, :settings_account
+      live "/settings/groups", AdminLive, :settings_groups
+      live "/settings/roles", AdminLive, :settings_roles
     end
   end
 

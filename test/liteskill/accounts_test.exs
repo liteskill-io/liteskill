@@ -1,5 +1,5 @@
 defmodule Liteskill.AccountsTest do
-  use Liteskill.DataCase, async: true
+  use Liteskill.DataCase, async: false
 
   alias Liteskill.Accounts
   alias Liteskill.Accounts.User

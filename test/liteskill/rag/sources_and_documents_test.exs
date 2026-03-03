@@ -1,5 +1,5 @@
 defmodule Liteskill.Rag.SourcesAndDocumentsTest do
-  use Liteskill.DataCase, async: true
+  use Liteskill.DataCase, async: false
 
   import Liteskill.RagTestHelpers
 

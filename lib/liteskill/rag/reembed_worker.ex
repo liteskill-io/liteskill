@@ -95,7 +95,7 @@ defmodule Liteskill.Rag.ReembedWorker do
             |> Enum.zip(embeddings)
             |> Enum.each(fn {chunk, embedding} ->
               chunk
-              |> Ecto.Changeset.change(%{embedding: Pgvector.new(embedding)})
+              |> Ecto.Changeset.change(%{embedding: :erlang.term_to_binary(embedding)})
               |> Repo.update!()
             end)
 

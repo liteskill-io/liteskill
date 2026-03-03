@@ -47,16 +47,6 @@ defmodule Liteskill.EventStore.Postgres do
   rescue
     _e in [Ecto.ConstraintError] ->
       {:error, :wrong_expected_version}
-
-    # coveralls-ignore-start
-    e in [Postgrex.Error] ->
-      if e.postgres[:code] == :unique_violation do
-        {:error, :wrong_expected_version}
-      else
-        reraise e, __STACKTRACE__
-      end
-
-      # coveralls-ignore-stop
   end
 
   @impl true

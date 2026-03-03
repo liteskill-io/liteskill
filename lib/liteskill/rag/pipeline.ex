@@ -117,7 +117,7 @@ defmodule Liteskill.Rag.Pipeline do
     base =
       if search && search != "" do
         pattern = "%#{search}%"
-        where(base, [j], fragment("?->>'url' ILIKE ?", j.args, ^pattern))
+        where(base, [j], fragment("json_extract(?, '$.url') LIKE ?", j.args, ^pattern))
       else
         base
       end

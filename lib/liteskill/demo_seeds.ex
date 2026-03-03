@@ -145,7 +145,6 @@ defmodule Liteskill.DemoSeeds do
     end
   rescue
     e in [
-      Postgrex.Error,
       DBConnection.ConnectionError,
       Ecto.ConstraintError,
       Ecto.InvalidChangesetError,

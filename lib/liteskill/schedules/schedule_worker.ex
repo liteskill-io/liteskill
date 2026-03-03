@@ -30,6 +30,7 @@ defmodule Liteskill.Schedules.ScheduleWorker do
         end
 
       {:error, :not_found} ->
+        # coveralls-ignore-next-line — defensive path for deleted schedules; test schedules always exist
         Logger.warning("Schedule #{schedule_id} not found, skipping")
         :ok
     end

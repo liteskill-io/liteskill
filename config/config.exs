@@ -46,7 +46,6 @@ config :liteskill, Liteskill.LLM, bedrock_region: "us-east-1"
 # For production it's recommended to configure a different adapter
 # at the `config/runtime.exs`.
 config :liteskill, Liteskill.Mailer, adapter: Swoosh.Adapters.Local
-config :liteskill, Liteskill.Repo, types: Liteskill.Repo.PostgrexTypes
 
 # Configure the endpoint
 config :liteskill, LiteskillWeb.Endpoint,
@@ -60,6 +59,7 @@ config :liteskill, LiteskillWeb.Endpoint,
   live_view: [signing_salt: "e8Rdk5aP"]
 
 config :liteskill, Oban,
+  engine: Oban.Engines.Lite,
   repo: Liteskill.Repo,
   queues: [default: 10, rag_ingest: 5, data_sync: 3, agent_runs: 3]
 
@@ -68,8 +68,8 @@ config :liteskill, :session_idle_timeout_seconds, 86_400
 # Server-side session expiration (seconds). Override via env vars in runtime.exs.
 config :liteskill, :session_max_age_seconds, 86_400
 
-# Single-user mode (desktop / self-hosted). Set SINGLE_USER_MODE=true to enable.
-config :liteskill, :single_user_mode, false
+# Single-user mode (desktop / self-hosted). Desktop-first default; set MULTI_USER_MODE=true to enable web platform mode.
+config :liteskill, :single_user_mode, true
 
 config :liteskill,
   ecto_repos: [Liteskill.Repo],
