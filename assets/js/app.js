@@ -17,6 +17,17 @@
 // If you have dependencies that try to import CSS, esbuild will generate a separate `app.css` file.
 // To load it, simply add a second `<link>` to your `root.html.heex` file.
 
+// Detect Tauri desktop environment and annotate body for CSS gating.
+// __TAURI_INTERNALS__ is injected by Tauri into all webview pages.
+if (window.__TAURI_INTERNALS__) {
+  document.body.setAttribute("data-tauri", "true")
+  // Detect platform (macos, linux, windows) for platform-specific CSS
+  const platform = navigator.platform.includes("Mac") ? "macos"
+    : navigator.platform.includes("Win") ? "windows"
+    : "linux"
+  document.body.setAttribute("data-platform", platform)
+}
+
 // Include phoenix_html to handle method=PUT/DELETE in forms and buttons.
 import "phoenix_html"
 // Establish Phoenix Socket and LiveView configuration.
@@ -231,6 +242,95 @@ const Hooks = {
       if (h > 0) return `${h}h ${m}m ${s}s`
       if (m > 0) return `${m}m ${s}s`
       return `${s}s`
+    }
+  },
+
+  DesktopShortcuts: {
+    mounted() {
+      this.handleKeydown = (e) => {
+        const isMac = navigator.platform.includes("Mac")
+        const mod = isMac ? e.metaKey : e.ctrlKey
+        if (!mod || e.shiftKey || e.altKey) return
+
+        const map = {
+          "k": "toggle_command_palette",
+          "n": "shortcut_new_conversation",
+          ",": "shortcut_settings",
+          "b": "toggle_sidebar",
+          "w": "shortcut_close",
+        }
+        const action = map[e.key]
+        if (action) {
+          e.preventDefault()
+          this.pushEvent(action, {})
+        }
+      }
+      window.addEventListener("keydown", this.handleKeydown)
+
+      // Listen for native menu events from Tauri
+      this.handleMenu = (e) => {
+        const action = e.detail?.action
+        if (action) this.pushEvent(action, {})
+      }
+      window.addEventListener("tauri:menu", this.handleMenu)
+
+      // Desktop notification handler
+      this.handleEvent("desktop_notification", ({ title, body }) => {
+        if (document.hasFocus()) return
+        if (window.__TAURI_INTERNALS__) {
+          window.__TAURI_INTERNALS__.invoke('plugin:notification|notify', {
+            title: title,
+            body: body || "",
+          }).catch(() => {})
+        } else if ("Notification" in window && Notification.permission === "granted") {
+          new Notification(title, { body: body || "" })
+        }
+      })
+    },
+    destroyed() {
+      window.removeEventListener("keydown", this.handleKeydown)
+      window.removeEventListener("tauri:menu", this.handleMenu)
+    }
+  },
+
+  CommandPaletteFocus: {
+    mounted() {
+      this.el.focus()
+    },
+    updated() {
+      this.el.focus()
+    }
+  },
+
+  FileDialog: {
+    mounted() {
+      this.handleEvent("open_file_dialog", async ({ title, filters, callback_event }) => {
+        if (window.__TAURI_INTERNALS__) {
+          try {
+            const path = await window.__TAURI_INTERNALS__.invoke('open_file_dialog', {
+              title: title || "Open File",
+              filters: filters || []
+            })
+            if (path) this.pushEvent(callback_event || "file_selected", { path })
+          } catch (err) {
+            console.error("File dialog error:", err)
+          }
+        }
+      })
+
+      this.handleEvent("save_file_dialog", async ({ title, default_name, callback_event }) => {
+        if (window.__TAURI_INTERNALS__) {
+          try {
+            const path = await window.__TAURI_INTERNALS__.invoke('save_file_dialog', {
+              title: title || "Save File",
+              defaultName: default_name || "untitled"
+            })
+            if (path) this.pushEvent(callback_event || "save_path_selected", { path })
+          } catch (err) {
+            console.error("Save dialog error:", err)
+          }
+        }
+      })
     }
   },
 

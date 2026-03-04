@@ -258,3 +258,72 @@ html {
   border-color: var(--color-primary) !important;
   background: color-mix(in oklch, var(--color-primary) 8%, transparent);
 }
+
+/* =============================================
+   Desktop app (Tauri) styles
+   All gated on body[data-tauri] so web mode is unaffected.
+   ============================================= */
+
+/* Drag region — makes an element act as a window title bar for dragging */
+.desktop-drag-region {
+  -webkit-app-region: drag;
+}
+.desktop-drag-region button,
+.desktop-drag-region a,
+.desktop-drag-region input,
+.desktop-drag-region select,
+.desktop-drag-region textarea,
+.desktop-drag-region [role="button"],
+.desktop-drag-region .dropdown,
+.desktop-drag-region .btn {
+  -webkit-app-region: no-drag;
+}
+
+/* macOS traffic light padding — only when in Tauri + macOS.
+   Traffic lights are ~38px from top and ~78px from left. */
+body[data-platform="macos"] .desktop-titlebar-pad {
+  padding-top: 38px;
+}
+body[data-platform="macos"] #sidebar .desktop-sidebar-header {
+  padding-top: 42px;
+  padding-left: 78px;
+}
+
+/* Desktop reconnection indicator — subtle bottom-center pill instead of error toast */
+body[data-tauri] #client-error,
+body[data-tauri] #server-error {
+  position: fixed !important;
+  bottom: 8px;
+  left: 50%;
+  right: auto;
+  top: auto;
+  transform: translateX(-50%);
+  max-width: 280px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  padding: 0.375rem 1rem;
+  opacity: 0.85;
+  z-index: 100;
+}
+
+/* Sidebar slide transition easing */
+#sidebar {
+  transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Command palette animations */
+.command-palette-backdrop {
+  animation: backdrop-fade 100ms ease-out;
+}
+@keyframes backdrop-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.command-palette-panel {
+  animation: cmd-slide-down 150ms ease-out;
+}
+@keyframes cmd-slide-down {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}

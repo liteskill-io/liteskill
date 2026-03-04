@@ -1,4 +1,8 @@
-<div class="h-screen w-screen overflow-hidden">
+<div class="h-screen w-screen overflow-hidden" id="app-shell" phx-hook="DesktopShortcuts">
   {@inner_content}
 </div>
+<LiteskillWeb.CommandPalette.command_palette
+  :if={@show_command_palette}
+  conversations={Map.get(assigns, :conversations, [])}
+/>
 <.flash_group flash={@flash} />

@@ -11,6 +11,11 @@ defmodule Liteskill.Application do
     LiteskillWeb.Plugs.RateLimiter.create_table()
     Liteskill.LlmGateway.TokenBucket.create_table()
 
+    if !test_env?() do
+      {:ok, _, _} =
+        Ecto.Migrator.with_repo(Liteskill.Repo, &Ecto.Migrator.run(&1, :up, all: true))
+    end
+
     # coveralls-ignore-start
     children =
       Enum.reject(

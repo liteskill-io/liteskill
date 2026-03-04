@@ -9,7 +9,6 @@ doc/
 dist/
 burrito_out/
 src-tauri/target/
-priv/postgres/
 
 # Asset build output (rebuilt during docker build)
 priv/static/assets/

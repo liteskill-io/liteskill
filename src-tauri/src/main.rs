@@ -1,5 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
@@ -139,6 +141,122 @@ fn kill_sidecar(app: &tauri::AppHandle) {
     }
 }
 
+/// Builds the native application menu (File, Edit, View, Help).
+fn build_app_menu(app: &tauri::AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, tauri::Error> {
+    let file_menu = SubmenuBuilder::new(app, "File")
+        .item(
+            &MenuItemBuilder::with_id("new_conversation", "New Conversation")
+                .accelerator("CmdOrCtrl+N")
+                .build(app)?,
+        )
+        .separator()
+        .item(&PredefinedMenuItem::close_window(app, None)?)
+        .build()?;
+
+    let edit_menu = SubmenuBuilder::new(app, "Edit")
+        .item(&PredefinedMenuItem::undo(app, None)?)
+        .item(&PredefinedMenuItem::redo(app, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::cut(app, None)?)
+        .item(&PredefinedMenuItem::copy(app, None)?)
+        .item(&PredefinedMenuItem::paste(app, None)?)
+        .item(&PredefinedMenuItem::select_all(app, None)?)
+        .build()?;
+
+    let view_menu = SubmenuBuilder::new(app, "View")
+        .item(
+            &MenuItemBuilder::with_id("toggle_sidebar", "Toggle Sidebar")
+                .accelerator("CmdOrCtrl+B")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("toggle_command_palette", "Command Palette")
+                .accelerator("CmdOrCtrl+K")
+                .build(app)?,
+        )
+        .build()?;
+
+    let help_menu = SubmenuBuilder::new(app, "Help")
+        .item(&MenuItemBuilder::with_id("about", "About Liteskill").build(app)?)
+        .build()?;
+
+    MenuBuilder::new(app)
+        .item(&file_menu)
+        .item(&edit_menu)
+        .item(&view_menu)
+        .item(&help_menu)
+        .build()
+}
+
+/// Sets up the system tray icon with Show/Quit menu.
+fn setup_tray(app: &tauri::App) -> Result<(), tauri::Error> {
+    let show_item = MenuItemBuilder::with_id("tray_show", "Show Liteskill").build(app)?;
+    let quit_item = MenuItemBuilder::with_id("tray_quit", "Quit").build(app)?;
+    let tray_menu = MenuBuilder::new(app)
+        .item(&show_item)
+        .separator()
+        .item(&quit_item)
+        .build()?;
+
+    TrayIconBuilder::new()
+        .icon(app.default_window_icon().unwrap().clone())
+        .menu(&tray_menu)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "tray_show" => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
+            "tray_quit" => {
+                kill_sidecar(app);
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let app = tray.app_handle();
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.unminimize();
+                    let _ = w.set_focus();
+                }
+            }
+        })
+        .build(app)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn open_file_dialog(
+    title: String,
+    filters: Vec<(String, Vec<String>)>,
+) -> Result<Option<String>, String> {
+    let mut dialog = rfd::AsyncFileDialog::new().set_title(&title);
+    for (name, exts) in &filters {
+        let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
+        dialog = dialog.add_filter(name, &ext_refs);
+    }
+    let file = dialog.pick_file().await;
+    Ok(file.map(|f| f.path().to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+async fn save_file_dialog(title: String, default_name: String) -> Result<Option<String>, String> {
+    let dialog = rfd::AsyncFileDialog::new()
+        .set_title(&title)
+        .set_file_name(&default_name);
+    let file = dialog.save_file().await;
+    Ok(file.map(|f| f.path().to_string_lossy().to_string()))
+}
+
 /// Returns true when LITESKILL_DEV=true — skip sidecar, connect to
 /// an already-running Phoenix dev server on port 4000 instead.
 fn dev_mode() -> bool {
@@ -186,9 +304,11 @@ fn run_dev_mode(context: tauri::Context<tauri::Wry>) {
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_notification::init())
+        .invoke_handler(tauri::generate_handler![open_file_dialog, save_file_dialog])
         .setup(move |app| {
             let url = format!("http://localhost:{port}");
-            tauri::WebviewWindowBuilder::new(
+            let builder = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
                 tauri::WebviewUrl::External(url.parse().unwrap()),
@@ -207,10 +327,44 @@ fn run_dev_mode(context: tauri::Context<tauri::Wry>) {
                         false
                     }
                 }
-            })
-            .build()?;
+            });
+
+            // macOS overlay title bar: keeps native traffic lights, hides title text,
+            // and lets web content flow under the title bar area.
+            #[cfg(target_os = "macos")]
+            let builder = builder
+                .title_bar_style(tauri::TitleBarStyle::Overlay)
+                .hidden_title(true);
+
+            let window = builder.build()?;
+
+            // Set native menu on the window
+            if let Ok(menu) = build_app_menu(app.handle()) {
+                let _ = window.set_menu(menu);
+            }
+
+            // System tray
+            setup_tray(app)?;
 
             Ok(())
+        })
+        .on_menu_event(|app, event| {
+            let id = event.id().as_ref();
+            match id {
+                "new_conversation" | "toggle_sidebar" | "toggle_command_palette" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.eval(&format!(
+                            "window.dispatchEvent(new CustomEvent('tauri:menu', {{ detail: {{ action: '{}' }} }}))",
+                            id
+                        ));
+                    }
+                }
+                id if id == "quit" || id.contains("quit") => {
+                    kill_sidecar(app);
+                    app.exit(0);
+                }
+                _ => {}
+            }
         })
         .run(context)
         .expect("error while running tauri application");
@@ -225,11 +379,16 @@ fn run_production_mode(context: tauri::Context<tauri::Wry>) {
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_notification::init())
+        .invoke_handler(tauri::generate_handler![open_file_dialog, save_file_dialog])
         .manage(AppState {
             sidecar_child: Mutex::new(None),
             shutting_down: AtomicBool::new(false),
         })
         .setup(|app| {
+            // System tray (set up before server start — shows icon immediately)
+            setup_tray(app)?;
+
             let port = match find_free_port() {
                 Ok(p) => p,
                 Err(e) => {
@@ -284,7 +443,7 @@ fn run_production_mode(context: tauri::Context<tauri::Wry>) {
                 // Tauri handles cross-thread window creation via IPC to the main
                 // thread's event loop, so this is safe from a background thread.
                 let url = format!("http://localhost:{port}");
-                if let Err(e) = tauri::WebviewWindowBuilder::new(
+                let builder = tauri::WebviewWindowBuilder::new(
                     &handle,
                     "main",
                     tauri::WebviewUrl::External(url.parse().unwrap()),
@@ -303,23 +462,49 @@ fn run_production_mode(context: tauri::Context<tauri::Wry>) {
                             false
                         }
                     }
-                })
-                .build()
-                {
-                    eprintln!("Failed to create window: {e}");
-                    kill_sidecar(&handle);
-                    handle.exit(1);
+                });
+
+                // macOS overlay title bar: keeps native traffic lights, hides
+                // title text, lets web content flow under the title bar area.
+                #[cfg(target_os = "macos")]
+                let builder = builder
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .hidden_title(true);
+
+                match builder.build() {
+                    Ok(window) => {
+                        // Set native menu on the window
+                        if let Ok(menu) = build_app_menu(&handle) {
+                            let _ = window.set_menu(menu);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to create window: {e}");
+                        kill_sidecar(&handle);
+                        handle.exit(1);
+                    }
                 }
             });
 
             Ok(())
         })
-        // Intercept menu events (especially CMD+Q on macOS)
         .on_menu_event(|app, event| {
-            if event.id().as_ref() == "quit" || event.id().as_ref().contains("quit") {
-                println!("Quit menu item triggered, shutting down gracefully...");
-                kill_sidecar(app);
-                app.exit(0);
+            let id = event.id().as_ref();
+            match id {
+                "new_conversation" | "toggle_sidebar" | "toggle_command_palette" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.eval(&format!(
+                            "window.dispatchEvent(new CustomEvent('tauri:menu', {{ detail: {{ action: '{}' }} }}))",
+                            id
+                        ));
+                    }
+                }
+                id if id == "quit" || id.contains("quit") => {
+                    println!("Quit menu item triggered, shutting down gracefully...");
+                    kill_sidecar(app);
+                    app.exit(0);
+                }
+                _ => {}
             }
         })
         .on_window_event(|window, event| {

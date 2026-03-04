@@ -156,7 +156,7 @@ defmodule LiteskillWeb.WikiLive do
       <main class="flex-1 flex flex-col min-w-0">
         <%= if @live_action == :wiki do %>
           <%!-- Wiki Home — Spaces --%>
-          <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+          <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <button
@@ -341,7 +341,7 @@ defmodule LiteskillWeb.WikiLive do
         <% end %>
         <%= if @live_action == :wiki_page_show && @wiki_document do %>
           <%!-- Wiki Page Detail --%>
-          <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+          <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div class="flex items-center gap-2 min-w-0">
                 <button

@@ -271,7 +271,7 @@ defmodule LiteskillWeb.ChatLive do
       <main class="flex-1 flex flex-col min-w-0">
         <%= if @live_action == :conversations do %>
           <div class="flex-1 flex flex-col min-w-0">
-            <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+            <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <button
@@ -408,7 +408,7 @@ defmodule LiteskillWeb.ChatLive do
             <%!-- Active conversation --%>
             <div class="flex flex-1 min-w-0 overflow-hidden">
               <div class="flex-1 flex flex-col min-w-0">
-                <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+                <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
                   <div class="flex items-center gap-2">
                     <button
                       :if={!@sidebar_open}
@@ -555,7 +555,7 @@ defmodule LiteskillWeb.ChatLive do
             </div>
           <% else %>
             <%!-- New conversation prompt --%>
-            <div :if={!@sidebar_open} class="px-4 pt-3">
+            <div :if={!@sidebar_open} class="px-4 pt-3 desktop-drag-region desktop-titlebar-pad">
               <button phx-click="toggle_sidebar" class="btn btn-circle btn-ghost btn-sm">
                 <.icon name="hero-bars-3-micro" class="size-5" />
               </button>
@@ -1074,15 +1074,27 @@ defmodule LiteskillWeb.ChatLive do
         # and the already-committed text doesn't duplicate the DB messages.
         db_streaming = fresh_conv.status == "streaming"
 
-        assign(socket,
-          streaming: still_streaming,
-          stream_content: if(db_streaming, do: socket.assigns.stream_content, else: ""),
-          messages: messages,
-          conversations: conversations,
-          conversation: fresh_conv,
-          pending_tool_calls: if(task_alive && db_streaming, do: socket.assigns.pending_tool_calls, else: []),
-          stream_task_pid: if(still_streaming, do: socket.assigns.stream_task_pid)
-        )
+        socket =
+          assign(socket,
+            streaming: still_streaming,
+            stream_content: if(db_streaming, do: socket.assigns.stream_content, else: ""),
+            messages: messages,
+            conversations: conversations,
+            conversation: fresh_conv,
+            pending_tool_calls:
+              if(task_alive && db_streaming, do: socket.assigns.pending_tool_calls, else: []),
+            stream_task_pid: if(still_streaming, do: socket.assigns.stream_task_pid)
+          )
+
+        # Notify when stream fully completes (not just between rounds)
+        if not still_streaming and socket.assigns.streaming do
+          push_event(socket, "desktop_notification", %{
+            title: "Response Complete",
+            body: String.slice(fresh_conv.title || "Conversation", 0, 80)
+          })
+        else
+          socket
+        end
     end
   end
 

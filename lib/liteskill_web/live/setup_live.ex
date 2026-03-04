@@ -52,14 +52,16 @@ defmodule LiteskillWeb.SetupLive do
         openrouter_pending: false,
         rag_embedding_models: rag_embedding_models,
         rag_current_model: rag_current_model,
-        or_models: nil,
         or_search: "",
         or_results: [],
+        or_results_all: [],
         or_loading: false,
         embed_search: "",
-        embed_results: []
+        embed_results: [],
+        model_tab: :inference
       )
       |> load_embed_models()
+      |> load_or_models()
 
     {:ok, socket}
   end
@@ -113,6 +115,7 @@ defmodule LiteskillWeb.SetupLive do
       rag_current_model: settings.embedding_model
     )
     |> load_embed_models()
+    |> load_or_models()
   end
 
   defp apply_wizard_mode(socket, :initial) do
@@ -128,13 +131,8 @@ defmodule LiteskillWeb.SetupLive do
   end
 
   defp compute_steps(:single_user) do
-    steps = [:welcome]
-    steps = if LlmProviders.list_all_providers() == [], do: steps ++ [:providers], else: steps
-    steps = if LlmModels.list_all_models() == [], do: steps ++ [:models], else: steps
-    steps = if Settings.embedding_enabled?(), do: steps, else: steps ++ [:rag]
-
-    # Always include at least welcome + one step so the wizard has something to do
-    if steps == [:welcome], do: [:welcome], else: steps
+    steps = [:welcome, :providers, :models]
+    if Settings.embedding_enabled?(), do: steps, else: steps ++ [:rag]
   end
 
   defp compute_steps(:server) do
@@ -193,6 +191,7 @@ defmodule LiteskillWeb.SetupLive do
               or_loading={@or_loading}
               embed_search={@embed_search}
               embed_results={@embed_results}
+              model_tab={@model_tab}
               error={@error}
             />
           <% :rag -> %>
@@ -251,28 +250,43 @@ defmodule LiteskillWeb.SetupLive do
 
     assigns = assign(assigns, :status, status)
 
+    clickable? = assigns.status in [:done, :active]
+    assigns = assign(assigns, :clickable?, clickable?)
+
     ~H"""
     <div class={["flex items-center gap-2", if(@index < @total, do: "flex-1")]}>
-      <div class={[
-        "size-6 rounded-full flex items-center justify-center text-xs font-bold",
-        case @status do
-          :done -> "bg-success text-success-content"
-          :active -> "bg-primary text-primary-content"
-          :pending -> "bg-base-300 text-base-content/50"
-        end
-      ]}>
-        <%= if @status == :done do %>
-          <.icon name="hero-check-micro" class="size-4" />
-        <% else %>
+      <button
+        :if={@clickable?}
+        type="button"
+        phx-click="navigate_step"
+        phx-value-step={@step}
+        class="flex items-center gap-2 cursor-pointer hover:opacity-80"
+      >
+        <div class={[
+          "size-6 rounded-full flex items-center justify-center text-xs font-bold",
+          if(@status == :done,
+            do: "bg-success text-success-content",
+            else: "bg-primary text-primary-content"
+          )
+        ]}>
+          <%= if @status == :done do %>
+            <.icon name="hero-check-micro" class="size-4" />
+          <% else %>
+            {@index}
+          <% end %>
+        </div>
+        <span class="text-sm font-medium text-base-content">
+          {@label}
+        </span>
+      </button>
+      <div :if={!@clickable?} class="flex items-center gap-2">
+        <div class="size-6 rounded-full flex items-center justify-center text-xs font-bold bg-base-300 text-base-content/50">
           {@index}
-        <% end %>
+        </div>
+        <span class="text-sm font-medium text-base-content/50">
+          {@label}
+        </span>
       </div>
-      <span class={[
-        "text-sm font-medium",
-        if(@status == :pending, do: "text-base-content/50", else: "text-base-content")
-      ]}>
-        {@label}
-      </span>
       <div :if={@index < @total} class="flex-1 h-px bg-base-300" />
     </div>
     """
@@ -624,6 +638,7 @@ defmodule LiteskillWeb.SetupLive do
   attr :or_loading, :boolean, required: true
   attr :embed_search, :string, default: ""
   attr :embed_results, :list, default: []
+  attr :model_tab, :atom, required: true
   attr :error, :string
 
   defp models_step(assigns) do
@@ -652,172 +667,220 @@ defmodule LiteskillWeb.SetupLive do
             <span>No providers configured. Go back and add a provider first, or skip for now.</span>
           </div>
         <% else %>
-          <div :if={@or_provider} class="mt-4 p-4 border border-primary/20 bg-primary/5 rounded-lg">
-            <h3 class="font-semibold mb-3">Browse OpenRouter Inference Models</h3>
-            <form phx-change="or_search" class="relative">
-              <input
-                type="text"
-                name="or_query"
-                value={@or_search}
-                placeholder="Search models (e.g. claude, gpt, llama)..."
-                class="input input-bordered input-sm w-full"
-                phx-debounce="300"
-                autocomplete="off"
-              />
-              <span :if={@or_loading} class="absolute right-3 top-2">
-                <span class="loading loading-spinner loading-xs"></span>
-              </span>
-            </form>
-            <div
-              :if={@or_results != []}
-              class="mt-2 max-h-64 overflow-y-auto border border-base-300 rounded-lg divide-y divide-base-300"
-            >
+          <div class="mt-4">
+            <div class="flex gap-1" role="tablist">
               <button
-                :for={m <- @or_results}
                 type="button"
-                phx-click="or_select_model"
-                phx-value-model-id={m.id}
-                class="flex items-center justify-between w-full px-3 py-2 text-left hover:bg-base-200 transition-colors cursor-pointer"
+                phx-click="switch_model_tab"
+                phx-value-tab="inference"
+                class={["tab tab-bordered", @model_tab == :inference && "tab-active"]}
               >
-                <div>
-                  <div class="text-sm font-medium">{m.name}</div>
-                  <div class="text-xs text-base-content/50 font-mono">{m.id}</div>
-                </div>
-                <div class="text-right text-xs text-base-content/50 shrink-0 ml-2">
-                  <div :if={m.context_length}>
-                    {div(m.context_length, 1000)}K ctx
-                  </div>
-                  <div :if={m.input_cost_per_million}>
-                    ${Decimal.round(m.input_cost_per_million, 2)}/M in
-                  </div>
-                </div>
+                Inference
+              </button>
+              <button
+                type="button"
+                phx-click="switch_model_tab"
+                phx-value-tab="embedding"
+                class={["tab tab-bordered", @model_tab == :embedding && "tab-active"]}
+              >
+                Embedding
+              </button>
+              <button
+                type="button"
+                phx-click="switch_model_tab"
+                phx-value-tab="manual"
+                class={["tab tab-bordered", @model_tab == :manual && "tab-active"]}
+              >
+                Manual
               </button>
             </div>
-            <p
-              :if={@or_search != "" && @or_results == [] && !@or_loading}
-              class="text-sm text-base-content/50 mt-2"
-            >
-              No models found matching "{@or_search}"
-            </p>
-          </div>
 
-          <div
-            :if={@embed_results != [] || @embed_search != ""}
-            class="mt-4 p-4 border border-secondary/20 bg-secondary/5 rounded-lg"
-          >
-            <h3 class="font-semibold mb-3">Browse Embedding Models</h3>
-            <p class="text-xs text-base-content/50 mb-2">
-              Embedding models from OpenRouter compatible with your configured providers.
-            </p>
-            <form phx-change="embed_search" class="relative">
-              <input
-                type="text"
-                name="embed_query"
-                value={@embed_search}
-                placeholder="Filter embedding models..."
-                class="input input-bordered input-sm w-full"
-                phx-debounce="100"
-                autocomplete="off"
-              />
-            </form>
-            <div
-              :if={@embed_results != []}
-              class="mt-2 max-h-64 overflow-y-auto border border-base-300 rounded-lg divide-y divide-base-300"
-            >
-              <button
-                :for={m <- @embed_results}
-                type="button"
-                phx-click="embed_select_model"
-                phx-value-model-id={m.id}
-                class="flex items-center justify-between w-full px-3 py-2 text-left hover:bg-base-200 transition-colors cursor-pointer"
-              >
-                <div>
-                  <div class="text-sm font-medium">{m.name}</div>
-                  <div class="text-xs text-base-content/50 font-mono">{m.id}</div>
-                </div>
-                <div class="text-right text-xs text-base-content/50 shrink-0 ml-2">
-                  <div :if={m[:dimensions]}>{m.dimensions}d</div>
-                  <div :if={m[:context_length] && !m[:dimensions]}>{m.context_length} ctx</div>
-                  <div :if={m.input_cost_per_million}>
-                    ${Decimal.round(m.input_cost_per_million, 2)}/M in
-                  </div>
-                </div>
-              </button>
-            </div>
-            <p
-              :if={@embed_search != "" && @embed_results == []}
-              class="text-sm text-base-content/50 mt-2"
-            >
-              No embedding models found matching "{@embed_search}"
-            </p>
-          </div>
-
-          <div class="mt-4 p-4 border border-base-300 rounded-lg">
-            <h3 class="font-semibold mb-3">Add Model Manually</h3>
-            <.form for={@llm_model_form} phx-submit="setup_create_model" class="space-y-3">
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div class="form-control">
-                  <label class="label"><span class="label-text">Display Name</span></label>
+            <div class="p-4 border border-base-300 rounded-lg mt-4">
+              <%!-- Inference tab --%>
+              <div :if={@model_tab == :inference}>
+                <h3 class="font-semibold mb-3">Browse Inference Models</h3>
+                <p class="text-xs text-base-content/50 mb-2">
+                  Inference models from OpenRouter compatible with your configured providers.
+                </p>
+                <form phx-change="or_search" class="relative">
                   <input
                     type="text"
-                    name="llm_model[name]"
+                    name="or_query"
+                    value={@or_search}
+                    placeholder="Search models (e.g. claude, gpt, llama)..."
                     class="input input-bordered input-sm w-full"
-                    required
-                    placeholder="Claude Sonnet"
+                    phx-debounce="300"
+                    autocomplete="off"
                   />
-                </div>
-                <div class="form-control">
-                  <label class="label"><span class="label-text">Provider</span></label>
-                  <select
-                    name="llm_model[provider_id]"
-                    class="select select-bordered select-sm w-full"
-                    required
+                  <span :if={@or_loading} class="absolute right-3 top-2">
+                    <span class="loading loading-spinner loading-xs"></span>
+                  </span>
+                </form>
+                <div
+                  :if={@or_results != []}
+                  class="mt-2 max-h-64 overflow-y-auto border border-base-300 rounded-lg divide-y divide-base-300"
+                >
+                  <button
+                    :for={m <- @or_results}
+                    type="button"
+                    phx-click="or_select_model"
+                    phx-value-model-id={m.id}
+                    class="flex items-center justify-between w-full px-3 py-2 text-left hover:bg-base-200 transition-colors cursor-pointer"
                   >
-                    <%= for p <- @llm_providers do %>
-                      <option value={p.id}>{p.name}</option>
-                    <% end %>
-                  </select>
+                    <div>
+                      <div class="text-sm font-medium">{m.name}</div>
+                      <div class="text-xs text-base-content/50 font-mono">{m.id}</div>
+                    </div>
+                    <div class="text-right text-xs text-base-content/50 shrink-0 ml-2">
+                      <div :if={m.context_length}>
+                        {div(m.context_length, 1000)}K ctx
+                      </div>
+                      <div :if={m.input_cost_per_million}>
+                        ${Decimal.round(m.input_cost_per_million, 2)}/M in
+                      </div>
+                    </div>
+                  </button>
                 </div>
-                <div class="form-control">
-                  <label class="label"><span class="label-text">Model ID</span></label>
-                  <input
-                    type="text"
-                    name="llm_model[model_id]"
-                    class="input input-bordered input-sm w-full"
-                    required
-                    placeholder="us.anthropic.claude-sonnet-4-20250514"
-                  />
-                </div>
-                <div class="form-control">
-                  <label class="label"><span class="label-text">Model Type</span></label>
-                  <select
-                    name="llm_model[model_type]"
-                    class="select select-bordered select-sm w-full"
-                  >
-                    <%= for mt <- @model_types do %>
-                      <option value={mt}>{mt}</option>
-                    <% end %>
-                  </select>
-                </div>
+                <p
+                  :if={@or_search != "" && @or_results == [] && !@or_loading}
+                  class="text-sm text-base-content/50 mt-2"
+                >
+                  No models found matching "{@or_search}"
+                </p>
+                <p
+                  :if={@or_search == "" && @or_results == [] && !@or_loading}
+                  class="text-sm text-base-content/50 mt-2"
+                >
+                  No inference models available. Ensure you have a compatible provider configured.
+                </p>
               </div>
-              <label :if={@mode != :single_user} class="label cursor-pointer gap-2 w-fit">
-                <input
-                  type="checkbox"
-                  name="llm_model[instance_wide]"
-                  value="true"
-                  checked
-                  class="checkbox checkbox-sm"
-                />
-                <span class="label-text">Instance-wide (all users)</span>
-              </label>
-              <p :if={@error} class="text-error text-sm">{@error}</p>
-              <button type="submit" class="btn btn-primary btn-sm">Add Model</button>
-            </.form>
+
+              <%!-- Embedding tab --%>
+              <div :if={@model_tab == :embedding}>
+                <h3 class="font-semibold mb-3">Browse Embedding Models</h3>
+                <p class="text-xs text-base-content/50 mb-2">
+                  Embedding models from OpenRouter compatible with your configured providers.
+                </p>
+                <form phx-change="embed_search" class="relative">
+                  <input
+                    type="text"
+                    name="embed_query"
+                    value={@embed_search}
+                    placeholder="Filter embedding models..."
+                    class="input input-bordered input-sm w-full"
+                    phx-debounce="100"
+                    autocomplete="off"
+                  />
+                </form>
+                <div
+                  :if={@embed_results != []}
+                  class="mt-2 max-h-64 overflow-y-auto border border-base-300 rounded-lg divide-y divide-base-300"
+                >
+                  <button
+                    :for={m <- @embed_results}
+                    type="button"
+                    phx-click="embed_select_model"
+                    phx-value-model-id={m.id}
+                    class="flex items-center justify-between w-full px-3 py-2 text-left hover:bg-base-200 transition-colors cursor-pointer"
+                  >
+                    <div>
+                      <div class="text-sm font-medium">{m.name}</div>
+                      <div class="text-xs text-base-content/50 font-mono">{m.id}</div>
+                    </div>
+                    <div class="text-right text-xs text-base-content/50 shrink-0 ml-2">
+                      <div :if={m[:dimensions]}>{m.dimensions}d</div>
+                      <div :if={m[:context_length] && !m[:dimensions]}>{m.context_length} ctx</div>
+                      <div :if={m.input_cost_per_million}>
+                        ${Decimal.round(m.input_cost_per_million, 2)}/M in
+                      </div>
+                    </div>
+                  </button>
+                </div>
+                <p
+                  :if={@embed_search != "" && @embed_results == []}
+                  class="text-sm text-base-content/50 mt-2"
+                >
+                  No embedding models found matching "{@embed_search}"
+                </p>
+                <p
+                  :if={@embed_search == "" && @embed_results == []}
+                  class="text-sm text-base-content/50 mt-2"
+                >
+                  No embedding models available. Ensure you have a compatible provider configured.
+                </p>
+              </div>
+
+              <%!-- Manual tab --%>
+              <div :if={@model_tab == :manual}>
+                <h3 class="font-semibold mb-3">Add Model Manually</h3>
+                <.form for={@llm_model_form} phx-submit="setup_create_model" class="space-y-3">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="form-control">
+                      <label class="label"><span class="label-text">Display Name</span></label>
+                      <input
+                        type="text"
+                        name="llm_model[name]"
+                        class="input input-bordered input-sm w-full"
+                        required
+                        placeholder="Claude Sonnet"
+                      />
+                    </div>
+                    <div class="form-control">
+                      <label class="label"><span class="label-text">Provider</span></label>
+                      <select
+                        name="llm_model[provider_id]"
+                        class="select select-bordered select-sm w-full"
+                        required
+                      >
+                        <%= for p <- @llm_providers do %>
+                          <option value={p.id}>{p.name}</option>
+                        <% end %>
+                      </select>
+                    </div>
+                    <div class="form-control">
+                      <label class="label"><span class="label-text">Model ID</span></label>
+                      <input
+                        type="text"
+                        name="llm_model[model_id]"
+                        class="input input-bordered input-sm w-full"
+                        required
+                        placeholder="us.anthropic.claude-sonnet-4-20250514"
+                      />
+                    </div>
+                    <div class="form-control">
+                      <label class="label"><span class="label-text">Model Type</span></label>
+                      <select
+                        name="llm_model[model_type]"
+                        class="select select-bordered select-sm w-full"
+                      >
+                        <%= for mt <- @model_types do %>
+                          <option value={mt}>{mt}</option>
+                        <% end %>
+                      </select>
+                    </div>
+                  </div>
+                  <label :if={@mode != :single_user} class="label cursor-pointer gap-2 w-fit">
+                    <input
+                      type="checkbox"
+                      name="llm_model[instance_wide]"
+                      value="true"
+                      checked
+                      class="checkbox checkbox-sm"
+                    />
+                    <span class="label-text">Instance-wide (all users)</span>
+                  </label>
+                  <p :if={@error} class="text-error text-sm">{@error}</p>
+                  <button type="submit" class="btn btn-primary btn-sm">Add Model</button>
+                </.form>
+              </div>
+            </div>
           </div>
         <% end %>
 
         <div :if={@llm_models != []} class="mt-4">
-          <h4 class="font-semibold text-sm mb-2">Configured Models</h4>
+          <h4 class="font-semibold text-sm mb-2">
+            Configured Models ({length(@llm_models)})
+          </h4>
           <div class="space-y-1">
             <div
               :for={m <- @llm_models}
@@ -1073,6 +1136,20 @@ defmodule LiteskillWeb.SetupLive do
   # --- Event handlers: Welcome ---
 
   @impl true
+  def handle_event("navigate_step", %{"step" => step_str}, socket) do
+    step = String.to_existing_atom(step_str)
+    steps = socket.assigns.steps
+    current_idx = Enum.find_index(steps, &(&1 == socket.assigns.step)) || 0
+    target_idx = Enum.find_index(steps, &(&1 == step)) || 0
+
+    if target_idx <= current_idx do
+      {:noreply, assign(socket, step: step, error: nil)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_event("welcome_continue", _params, socket) do
     {:noreply, advance_step(socket)}
   end
@@ -1192,11 +1269,13 @@ defmodule LiteskillWeb.SetupLive do
             providers = LlmProviders.list_all_providers()
 
             {:noreply,
-             assign(socket,
+             socket
+             |> assign(
                llm_providers: providers,
                llm_provider_form: to_form(%{}, as: :llm_provider),
                error: nil
-             )}
+             )
+             |> load_embed_models()}
 
           {:error, changeset} ->
             {:noreply, assign(socket, error: action_error("create provider", changeset))}
@@ -1217,25 +1296,24 @@ defmodule LiteskillWeb.SetupLive do
     {:noreply, advance_step(socket)}
   end
 
+  # --- Event handlers: Model Tab ---
+
+  @impl true
+  def handle_event("switch_model_tab", %{"tab" => tab}, socket) do
+    {:noreply, assign(socket, model_tab: String.to_existing_atom(tab))}
+  end
+
   # --- Event handlers: OpenRouter Model Search ---
 
   @impl true
   def handle_event("or_search", %{"or_query" => query}, socket) do
-    socket =
-      if is_nil(socket.assigns.or_models) do
-        case Models.list_models() do
-          {:ok, models} -> assign(socket, or_models: models, or_loading: false)
-          {:error, _} -> assign(socket, or_models: [], or_loading: false)
-        end
-      else
-        socket
-      end
+    all = socket.assigns.or_results_all
 
     results =
       if String.trim(query) == "" do
-        []
+        all
       else
-        Models.search_models(socket.assigns.or_models, query)
+        Models.search_models(all, query)
       end
 
     {:noreply, assign(socket, or_search: query, or_results: results)}
@@ -1246,7 +1324,7 @@ defmodule LiteskillWeb.SetupLive do
     user_id = socket.assigns.current_user.id
     or_provider = Enum.find(socket.assigns.llm_providers, &(&1.provider_type == "openrouter"))
 
-    case Enum.find(socket.assigns.or_models || [], &(&1.id == model_id)) do
+    case Enum.find(socket.assigns.or_results_all, &(&1.id == model_id)) do
       nil ->
         {:noreply, assign(socket, error: "Model not found")}
 
@@ -1273,7 +1351,7 @@ defmodule LiteskillWeb.SetupLive do
                llm_models: models,
                rag_embedding_models: embedding_models,
                or_search: "",
-               or_results: [],
+               or_results: socket.assigns.or_results_all,
                error: nil
              )}
 
@@ -1521,10 +1599,12 @@ defmodule LiteskillWeb.SetupLive do
   @impl true
   def handle_info(:openrouter_connected, socket) do
     {:noreply,
-     assign(socket,
+     socket
+     |> assign(
        openrouter_pending: false,
        llm_providers: LlmProviders.list_all_providers()
-     )}
+     )
+     |> load_embed_models()}
   end
 
   defp advance_config(socket) do
@@ -1590,5 +1670,21 @@ defmodule LiteskillWeb.SetupLive do
     provider_types = Enum.map(providers, & &1.provider_type)
 
     Liteskill.EmbeddingCatalog.filter_for_providers(Liteskill.EmbeddingCatalog.fetch_models(), provider_types)
+  end
+
+  defp load_or_models(socket) do
+    or_provider = Enum.find(socket.assigns.llm_providers, &(&1.provider_type == "openrouter"))
+
+    if or_provider do
+      case Models.list_models() do
+        {:ok, models} ->
+          assign(socket, or_results_all: models, or_results: models, or_loading: false)
+
+        {:error, _} ->
+          assign(socket, or_results_all: [], or_results: [], or_loading: false)
+      end
+    else
+      assign(socket, or_results_all: [], or_results: [], or_loading: false)
+    end
   end
 end

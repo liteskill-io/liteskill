@@ -193,8 +193,6 @@ defmodule LiteskillWeb.AdminLive.ServerTab do
         <div class="card-body">
           <h2 class="card-title mb-4">Database</h2>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <.info_row label="Host" value={to_string(@repo_config[:hostname] || "—")} />
-            <.info_row label="Port" value={to_string(@repo_config[:port] || 5432)} />
             <.info_row label="Database" value={to_string(@repo_config[:database] || "—")} />
             <.info_row label="Pool Size" value={to_string(@repo_config[:pool_size] || "—")} />
           </div>

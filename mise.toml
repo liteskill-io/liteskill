@@ -38,10 +38,10 @@ IMAGE="liteskill-desktop-build"
 OUT_DIR="dist/linux"
 
 echo "==> Building desktop Linux toolchain image (cached after first run)..."
-docker build -f scripts/Dockerfile.desktop-build -t "$IMAGE" .
+docker build --platform linux/amd64 -f scripts/Dockerfile.desktop-build -t "$IMAGE" .
 
 echo "==> Running desktop build (project mounted into container)..."
-docker run --rm -u "$(id -u):$(id -g)" \
+docker run --rm --platform linux/amd64 -u "$(id -u):$(id -g)" \
     -e HOME=/tmp/build-home \
     -e CARGO_HOME=/tmp/build-home/.cargo \
     -v "$(pwd):/build" "$IMAGE" \

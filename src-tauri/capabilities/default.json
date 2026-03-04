@@ -25,6 +25,9 @@
         }
       ]
     },
-    "shell:default"
+    "shell:default",
+    "core:tray:default",
+    "core:menu:default",
+    "notification:default"
   ]
 }

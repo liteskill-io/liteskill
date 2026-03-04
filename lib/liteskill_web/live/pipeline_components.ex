@@ -20,7 +20,7 @@ defmodule LiteskillWeb.PipelineComponents do
   def pipeline_dashboard(assigns) do
     ~H"""
     <div class="flex flex-col h-full">
-      <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+      <header class="px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region desktop-titlebar-pad">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <.link navigate={~p"/sources"} class="btn btn-circle btn-ghost btn-sm">

@@ -31,6 +31,16 @@ wget -q "https://github.com/erlang/otp/releases/download/OTP-${OTP_VERSION}/otp_
 tar xzf "otp_src_${OTP_VERSION}.tar.gz"
 cd "otp_src_${OTP_VERSION}"
 
+# When cross-compiling under emulation (e.g. x86_64 Docker on ARM Mac via
+# Rosetta/QEMU), the JIT's W^X memory pages conflict with the binary
+# translator, causing prim_tty NIF and bootstrap beam to crash. Callers
+# set DISABLE_JIT=true to work around this (see Dockerfile.desktop-build).
+EXTRA_CONFIGURE=""
+if [ "${DISABLE_JIT:-}" = "true" ]; then
+    EXTRA_CONFIGURE="--disable-jit"
+    log "JIT disabled (cross-platform or emulated build)"
+fi
+
 ./configure \
     --prefix=/usr/local \
     --without-javac \
@@ -39,7 +49,8 @@ cd "otp_src_${OTP_VERSION}"
     --without-observer \
     --without-et \
     --without-megaco \
-    --disable-dynamic-ssl-lib
+    --disable-dynamic-ssl-lib \
+    $EXTRA_CONFIGURE
 
 make -j"$(nproc)"
 make install

@@ -137,7 +137,7 @@ defmodule LiteskillWeb.Layouts do
         )
       ]}
     >
-      <div class="flex items-center justify-between p-3 border-b border-base-300 min-w-64">
+      <div class="flex items-center justify-between p-3 border-b border-base-300 min-w-64 desktop-drag-region desktop-sidebar-header">
         <div class="flex items-center gap-2">
           <img src={~p"/images/logo_dark_mode.svg"} class="size-7 hidden dark:block" />
           <img src={~p"/images/logo_light_mode.svg"} class="size-7 block dark:hidden" />

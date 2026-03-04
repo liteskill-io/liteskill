@@ -3,6 +3,7 @@ defmodule LiteskillWeb.Router do
   use LiteskillWeb, :router
 
   alias LiteskillWeb.Plugs.Auth
+  alias LiteskillWeb.Plugs.DesktopShortcuts
   alias LiteskillWeb.Plugs.LiveAuth
   alias LiteskillWeb.Plugs.RateLimiter
 
@@ -84,7 +85,7 @@ defmodule LiteskillWeb.Router do
     pipe_through [:browser]
 
     live_session :admin,
-      on_mount: [{LiveAuth, :require_admin}] do
+      on_mount: [{LiveAuth, :require_admin}, {DesktopShortcuts, :default}] do
       live "/admin", AdminLive, :admin_usage
       live "/admin/usage", AdminLive, :admin_usage
       live "/admin/servers", AdminLive, :admin_servers
@@ -119,7 +120,7 @@ defmodule LiteskillWeb.Router do
     pipe_through [:browser]
 
     live_session :chat,
-      on_mount: [{LiveAuth, :require_authenticated}] do
+      on_mount: [{LiveAuth, :require_authenticated}, {DesktopShortcuts, :default}] do
       live "/", ChatLive, :index
       live "/conversations", ChatLive, :conversations
       live "/c/:conversation_id", ChatLive, :show

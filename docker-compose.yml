@@ -1,5 +1,5 @@
 x-app-env: &app-env
-  DATABASE_URL: "ecto://${POSTGRES_USER:-liteskill}:${POSTGRES_PASSWORD:-liteskill}@db/${POSTGRES_DB:-liteskill}"
+  DATABASE_PATH: "${DATABASE_PATH:-/data/liteskill.db}"
   # SECRET_KEY_BASE is auto-generated on first boot if not provided.
   # To persist across container restarts, mount a volume and set LITESKILL_SECRETS_FILE.
   SECRET_KEY_BASE: "${SECRET_KEY_BASE:-}"
@@ -8,31 +8,13 @@ x-app-env: &app-env
   #   ENCRYPTION_KEY=<your-key>  (generate with: openssl rand -base64 32)
 
 services:
-  db:
-    image: pgvector/pgvector:pg18
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-liteskill}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-liteskill}
-      POSTGRES_DB: ${POSTGRES_DB:-liteskill}
-    volumes:
-      - pgdata:/var/lib/postgresql
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-liteskill}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   app:
     build: .
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
     ports:
       - "4000:4000"
+    volumes:
+      - sqlitedata:/data
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:4000"]
       interval: 5s
@@ -50,13 +32,12 @@ services:
   migrate:
     build: .
     command: ["bin/migrate"]
-    depends_on:
-      db:
-        condition: service_healthy
+    volumes:
+      - sqlitedata:/data
     environment:
       <<: *app-env
     profiles:
       - tools
 
 volumes:
-  pgdata:
+  sqlitedata:

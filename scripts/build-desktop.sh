@@ -2,7 +2,7 @@
 #
 # Shared desktop build script used by both Docker and GitHub Actions CI.
 # Handles everything after system dependencies + toolchains are installed:
-#   ERTS packaging → PG fetch → Elixir build → Burrito → Tauri → post-process
+#   ERTS packaging → Elixir build → Burrito → Tauri → post-process
 #
 # Usage:
 #   MIX_ENV=prod bash scripts/build-desktop.sh <target-triple>
@@ -95,18 +95,7 @@ case "$TRIPLE" in
 esac
 
 # ---------------------------------------------------------------------------
-# Phase 2: Fetch PostgreSQL binaries (skip if already cached)
-# ---------------------------------------------------------------------------
-if [ -f "$PROJECT_ROOT/priv/postgres/$TRIPLE/bin/initdb" ]; then
-  log "PostgreSQL binaries already present (cache hit), skipping fetch"
-else
-  log "Fetching PostgreSQL binaries..."
-  bash "$SCRIPT_DIR/fetch-postgres.sh" "$TRIPLE"
-fi
-log "PG binaries:" && ls -la "$PROJECT_ROOT/priv/postgres/$TRIPLE/bin/"
-
-# ---------------------------------------------------------------------------
-# Phase 3: Elixir build
+# Phase 2: Elixir build
 # ---------------------------------------------------------------------------
 log "Building Elixir release..."
 cd "$PROJECT_ROOT"
@@ -117,12 +106,20 @@ export HOME="${HOME:-/root}"
 mix local.hex --force
 mix local.rebar --force
 mix deps.get --only prod
+
+# Force-recompile deps for the current platform. When running in Docker with
+# a mounted host project, _build may contain deps compiled on macOS with
+# host-specific absolute paths baked into BEAM files (Burrito stores its
+# source path for git metadata). Force-recompiling ensures all deps use
+# container-local paths.
+mix deps.compile --force
+
 npm install --prefix assets
 mix compile
 mix assets.deploy
 
 # ---------------------------------------------------------------------------
-# Phase 4: Burrito release
+# Phase 3: Burrito release
 # ---------------------------------------------------------------------------
 log "Building Burrito release..."
 export BURRITO_TARGET="$BURRITO_TARGET"
@@ -130,7 +127,7 @@ mix release desktop --overwrite
 log "Burrito output:" && ls -la burrito_out/
 
 # ---------------------------------------------------------------------------
-# Phase 5: Rename Burrito output for Tauri sidecar naming
+# Phase 4: Rename Burrito output for Tauri sidecar naming
 # ---------------------------------------------------------------------------
 # Burrito outputs: burrito_out/desktop_<burrito_target>
 # Tauri expects:   burrito_out/desktop-<target-triple>
@@ -147,7 +144,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Phase 6: Build Tauri app
+# Phase 5: Build Tauri app
 # ---------------------------------------------------------------------------
 log "Building Tauri app..."
 
@@ -164,7 +161,7 @@ cargo tauri build
 cd "$PROJECT_ROOT"
 
 # ---------------------------------------------------------------------------
-# Phase 7: Platform-specific post-processing
+# Phase 6: Platform-specific post-processing
 # ---------------------------------------------------------------------------
 case "$TRIPLE" in
   *-linux-*)
@@ -216,7 +213,7 @@ case "$TRIPLE" in
 esac
 
 # ---------------------------------------------------------------------------
-# Phase 8: Verify artifacts
+# Phase 7: Verify artifacts
 # ---------------------------------------------------------------------------
 log "=== Build artifacts ==="
 find src-tauri/target/release/bundle -type f \( \

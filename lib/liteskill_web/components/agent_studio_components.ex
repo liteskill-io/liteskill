@@ -24,7 +24,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def agent_form_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center gap-2">
         <button
           :if={!@sidebar_open}
@@ -75,7 +75,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def team_form_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center gap-2">
         <button
           :if={!@sidebar_open}
@@ -119,7 +119,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def run_form_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center gap-2">
         <button
           :if={!@sidebar_open}
@@ -156,7 +156,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def schedule_form_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center gap-2">
         <button
           :if={!@sidebar_open}
@@ -1116,7 +1116,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def agent_studio_landing(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center gap-2">
         <button
           :if={!@sidebar_open}
@@ -1213,7 +1213,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def agents_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <button
@@ -1251,7 +1251,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def agent_show_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center gap-2">
         <button
           :if={!@sidebar_open}
@@ -1316,7 +1316,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def teams_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <button
@@ -1354,7 +1354,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def team_show_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center gap-2">
         <button
           :if={!@sidebar_open}
@@ -1431,7 +1431,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def runs_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <button
@@ -1472,7 +1472,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def run_show_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center gap-2">
         <button
           :if={!@sidebar_open}
@@ -1727,7 +1727,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def run_log_show_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <button
@@ -1872,7 +1872,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def schedules_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <button
@@ -1910,7 +1910,7 @@ defmodule LiteskillWeb.AgentStudioComponents do
 
   def schedule_show_page(assigns) do
     ~H"""
-    <header class="px-4 py-3 border-b border-base-300 flex-shrink-0">
+    <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
       <div class="flex items-center gap-2">
         <button
           :if={!@sidebar_open}

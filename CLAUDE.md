@@ -14,9 +14,9 @@ mix ecto.reset               # Drop + create + migrate + seed
 mix phx.server               # Start dev server on localhost:4000
 mix test.e2e                 # Run Wallaby E2E browser tests (requires chromedriver)
 
-# Docker-based (no local Postgres needed)
-./scripts/test-with-docker.sh test        # Run tests via Docker Postgres
-./scripts/test-with-docker.sh precommit   # Full precommit via Docker
+# Isolated test run (SQLite — no external DB needed)
+./scripts/test-with-docker.sh test        # Run tests with temp SQLite DB
+./scripts/test-with-docker.sh precommit   # Full precommit with temp SQLite DB
 ```
 
 Always run `mix precommit` after completing changes.
