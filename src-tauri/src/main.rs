@@ -329,13 +329,6 @@ fn run_dev_mode(context: tauri::Context<tauri::Wry>) {
                 }
             });
 
-            // macOS overlay title bar: keeps native traffic lights, hides title text,
-            // and lets web content flow under the title bar area.
-            #[cfg(target_os = "macos")]
-            let builder = builder
-                .title_bar_style(tauri::TitleBarStyle::Overlay)
-                .hidden_title(true);
-
             let window = builder.build()?;
 
             // Set native menu on the window
@@ -463,13 +456,6 @@ fn run_production_mode(context: tauri::Context<tauri::Wry>) {
                         }
                     }
                 });
-
-                // macOS overlay title bar: keeps native traffic lights, hides
-                // title text, lets web content flow under the title bar area.
-                #[cfg(target_os = "macos")]
-                let builder = builder
-                    .title_bar_style(tauri::TitleBarStyle::Overlay)
-                    .hidden_title(true);
 
                 match builder.build() {
                     Ok(window) => {

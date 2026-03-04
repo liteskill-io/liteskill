@@ -37,5 +37,8 @@
 
   # -- 5. Defensive guard clauses (is_binary on always-map values) --
   {"lib/liteskill/data_sources/connectors/google_drive.ex", :pattern_match},
-  {"lib/liteskill/rag/ingest_worker.ex", :pattern_match_cov}
+  {"lib/liteskill/rag/ingest_worker.ex", :pattern_match_cov},
+
+  # -- 6. Wallaby DSL — assert_has return type coverage in pipe chain --
+  {"test/support/feature_case.ex", :pattern_match_cov}
 ]

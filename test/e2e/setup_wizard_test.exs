@@ -85,6 +85,9 @@ defmodule LiteskillWeb.E2E.SetupWizardTest do
       |> click(Query.button("Continue"))
       |> assert_has(Query.css("h2", text: "Configure LLM Models"))
 
+      # Switch to Manual tab (defaults to Inference)
+      |> click(Query.css("[phx-click='switch_model_tab'][phx-value-tab='manual']"))
+
       # Fill model form
       |> fill_in(Query.css("[name='llm_model[name]']"), with: "Claude Test")
       |> fill_in(Query.css("[name='llm_model[model_id]']"), with: "claude-test-model")

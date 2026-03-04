@@ -37,6 +37,10 @@ defmodule LiteskillWeb.Markdown do
   # has the {"root": {"type": ...}} structure (nested) or flat spec keys.
   @json_spec_fence_re ~r/```json\s*\n([\s\S]*?)```/
 
+  # Matches an open (incomplete) visual fence — opening tag with no closing ```.
+  # Used during streaming to detect partially-received visual blocks.
+  @open_visual_fence_re ~r/```(?:spec|json-render)\s*\n[\s\S]*$/
+
   @doc """
   Renders a complete markdown string to an HTML-safe Phoenix.HTML struct.
   """
@@ -61,7 +65,7 @@ defmodule LiteskillWeb.Markdown do
   def render_streaming(""), do: {:safe, ""}
 
   def render_streaming(markdown) when is_binary(markdown) do
-    {cleaned, placeholders} = extract_visual_blocks(markdown)
+    {cleaned, has_visual} = strip_visual_for_streaming(markdown)
 
     html =
       @mdex_opts
@@ -69,7 +73,45 @@ defmodule LiteskillWeb.Markdown do
       |> MDEx.new()
       |> MDEx.to_html!()
 
-    {:safe, html |> replace_citations() |> restore_visual_blocks(placeholders)}
+    html = replace_citations(html)
+
+    if has_visual do
+      {:safe, html <> visual_generating_html()}
+    else
+      {:safe, html}
+    end
+  end
+
+  # Strip all visual content during streaming to avoid rendering artifacts
+  # from partially-received JSON specs. Returns {cleaned_markdown, has_visual?}.
+  defp strip_visual_for_streaming(markdown) do
+    original = markdown
+
+    # Strip complete fenced visual blocks
+    stripped = Regex.replace(@spec_fence_re, markdown, "")
+    stripped = Regex.replace(@json_render_fence_re, stripped, "")
+
+    # Strip incomplete (open) visual fences still being streamed
+    stripped = Regex.replace(@open_visual_fence_re, stripped, "")
+
+    # Strip bare JSONL patch lines
+    stripped = strip_bare_jsonl_for_streaming(stripped)
+
+    {stripped, stripped != original}
+  end
+
+  defp strip_bare_jsonl_for_streaming(markdown) do
+    markdown
+    |> String.split("\n")
+    |> Enum.reject(&jsonl_patch_line?/1)
+    |> Enum.join("\n")
+  end
+
+  defp visual_generating_html do
+    ~s(<div class="flex items-center gap-2 mt-3 px-3 py-2 rounded-lg bg-base-200/50 border border-base-300 text-sm text-base-content/60">) <>
+      ~s(<span class="loading loading-spinner loading-xs"></span>) <>
+      ~s( Visual response generating&hellip;) <>
+      ~s(</div>)
   end
 
   defp replace_citations(html) do

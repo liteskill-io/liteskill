@@ -163,6 +163,36 @@ const Hooks = {
     }
   },
 
+  DownloadJson: {
+    mounted() {
+      this.handleEvent("download_json", ({filename, content}) => {
+        const blob = new Blob([content], {type: "application/json"})
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = filename
+        a.click()
+        URL.revokeObjectURL(url)
+      })
+    }
+  },
+
+  CopyToClipboard: {
+    mounted() {
+      this.el.addEventListener("click", () => {
+        const targetId = this.el.dataset.copyTarget
+        const target = document.getElementById(targetId)
+        if (target) {
+          navigator.clipboard.writeText(target.innerText).then(() => {
+            const original = this.el.innerHTML
+            this.el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+            setTimeout(() => { this.el.innerHTML = original }, 2000)
+          })
+        }
+      })
+    }
+  },
+
   PipelineChart: {
     mounted() {
       const COLORS = [
@@ -329,6 +359,16 @@ const Hooks = {
           } catch (err) {
             console.error("Save dialog error:", err)
           }
+        }
+      })
+    }
+  },
+
+  ExpandChildren: {
+    mounted() {
+      this.el.addEventListener("toggle", () => {
+        if (this.el.open) {
+          this.el.querySelectorAll("details").forEach(d => d.open = true)
         }
       })
     }

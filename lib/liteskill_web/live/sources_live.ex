@@ -169,7 +169,10 @@ defmodule LiteskillWeb.SourcesLive do
       <main class="flex-1 flex flex-col min-w-0">
         <%= if @live_action == :sources do %>
           <%!-- Data Sources --%>
-          <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
+          <header class={[
+            "px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region",
+            !@sidebar_open && "desktop-titlebar-pad"
+          ]}>
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <button
@@ -249,7 +252,10 @@ defmodule LiteskillWeb.SourcesLive do
         <% end %>
         <%= if @live_action == :source_show && @current_source do %>
           <%!-- Source Documents --%>
-          <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
+          <header class={[
+            "px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region",
+            !@sidebar_open && "desktop-titlebar-pad"
+          ]}>
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <button
@@ -350,7 +356,10 @@ defmodule LiteskillWeb.SourcesLive do
         <% end %>
         <%= if @live_action == :source_document_show && @source_document do %>
           <%!-- Document RAG Detail --%>
-          <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
+          <header class={[
+            "px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region",
+            !@sidebar_open && "desktop-titlebar-pad"
+          ]}>
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <button

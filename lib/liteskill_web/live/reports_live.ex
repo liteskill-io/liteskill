@@ -88,7 +88,10 @@ defmodule LiteskillWeb.ReportsLive do
 
       <main class="flex-1 flex flex-col min-w-0">
         <%= if @live_action == :reports do %>
-          <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
+          <header class={[
+            "px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region",
+            !@sidebar_open && "desktop-titlebar-pad"
+          ]}>
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <button
@@ -129,7 +132,10 @@ defmodule LiteskillWeb.ReportsLive do
           <header
             id="report-detail"
             phx-hook="DownloadMarkdown"
-            class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}
+            class={[
+              "px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region",
+              !@sidebar_open && "desktop-titlebar-pad"
+            ]}
           >
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div class="flex items-center gap-2 min-w-0">

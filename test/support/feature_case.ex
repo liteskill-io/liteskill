@@ -52,6 +52,9 @@ defmodule LiteskillWeb.FeatureCase do
     |> fill_in(Query.css("#user_email"), with: email)
     |> fill_in(Query.css("#user_password"), with: password)
     |> click(Query.button("Register"))
+    # Wait for the redirect chain (/auth/session → /) to complete
+    # so the session cookie is set before returning.
+    |> assert_has(Query.css("h1", text: "What can I help you with?"))
 
     %{session: session, name: name, email: email, password: password}
   end

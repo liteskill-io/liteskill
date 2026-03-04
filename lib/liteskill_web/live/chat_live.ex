@@ -14,6 +14,7 @@ defmodule LiteskillWeb.ChatLive do
   alias LiteskillWeb.ChatLive.CostHandler
   alias LiteskillWeb.ChatLive.EditHandler
   alias LiteskillWeb.ChatLive.Helpers, as: ChatHelpers
+  alias LiteskillWeb.ChatLive.NotationHandler
   alias LiteskillWeb.ChatLive.SourcesHandler
   alias LiteskillWeb.ChatLive.ToolHandler
   alias LiteskillWeb.McpComponents
@@ -118,8 +119,13 @@ defmodule LiteskillWeb.ChatLive do
        show_usage_modal: false,
        usage_modal_data: nil,
        has_admin_access: has_admin_access,
-       single_user_mode: Liteskill.SingleUser.enabled?()
+       single_user_mode: Liteskill.SingleUser.enabled?(),
+       # JSON notation viewer
+       show_json_viewer: false,
+       json_content: nil,
+       json_notation: nil
      )
+     |> allow_upload(:conversation_import, accept: ~w(.json), max_entries: 1, max_file_size: 10_000_000)
      |> then(fn socket ->
        if connected?(socket) && MapSet.size(selected_server_ids) > 0,
          do: send(self(), :fetch_tools)
@@ -158,6 +164,9 @@ defmodule LiteskillWeb.ChatLive do
       streaming: false,
       stream_content: "",
       pending_tool_calls: [],
+      show_json_viewer: false,
+      json_content: nil,
+      json_notation: nil,
       page_title: "Liteskill"
     )
   end
@@ -271,7 +280,10 @@ defmodule LiteskillWeb.ChatLive do
       <main class="flex-1 flex flex-col min-w-0">
         <%= if @live_action == :conversations do %>
           <div class="flex-1 flex flex-col min-w-0">
-            <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
+            <header class={[
+              "px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region",
+              !@sidebar_open && "desktop-titlebar-pad"
+            ]}>
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <button
@@ -408,7 +420,10 @@ defmodule LiteskillWeb.ChatLive do
             <%!-- Active conversation --%>
             <div class="flex flex-1 min-w-0 overflow-hidden">
               <div class="flex-1 flex flex-col min-w-0">
-                <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
+                <header class={[
+                  "px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region",
+                  !@sidebar_open && "desktop-titlebar-pad"
+                ]}>
                   <div class="flex items-center gap-2">
                     <button
                       :if={!@sidebar_open}
@@ -432,6 +447,7 @@ defmodule LiteskillWeb.ChatLive do
                       <.icon name="hero-information-circle-micro" class="size-4" />
                     </button>
                     <button
+                      :if={!@single_user_mode}
                       phx-click="open_sharing"
                       phx-value-entity-type="conversation"
                       phx-value-entity-id={@conversation.id}
@@ -440,10 +456,27 @@ defmodule LiteskillWeb.ChatLive do
                     >
                       <.icon name="hero-share-micro" class="size-4" />
                     </button>
+                    <button
+                      phx-click="toggle_json_view"
+                      class={["btn btn-ghost btn-sm btn-square", @show_json_viewer && "btn-active"]}
+                      title="JSON notation"
+                    >
+                      <.icon name="hero-code-bracket-micro" class="size-4" />
+                    </button>
                   </div>
                 </header>
 
-                <div id="messages" phx-hook="ScrollBottom" class="flex-1 overflow-y-auto px-4 py-4">
+                <NotationHandler.json_viewer
+                  :if={@show_json_viewer}
+                  show_json_viewer={@show_json_viewer}
+                  json_notation={@json_notation}
+                />
+                <div
+                  :if={!@show_json_viewer}
+                  id="messages"
+                  phx-hook="ScrollBottom"
+                  class="flex-1 overflow-y-auto px-4 py-4"
+                >
                   <%= for msg <- ChatHelpers.display_messages(@messages, @editing_message_id) do %>
                     <ChatComponents.message_bubble
                       :if={msg.content && msg.content != ""}
@@ -457,7 +490,7 @@ defmodule LiteskillWeb.ChatLive do
                       edit_auto_confirm={@edit_auto_confirm_tools}
                     />
                     <SourcesComponents.sources_button
-                      :if={@editing_message_id != msg.id && msg.stop_reason != "tool_use"}
+                      :if={@editing_message_id != msg.id && msg.role == "assistant"}
                       message={msg}
                     />
                     <%!-- Tool calls for completed messages (inline) --%>
@@ -619,6 +652,7 @@ defmodule LiteskillWeb.ChatLive do
                     Add one in Settings
                   </.link>
                 </p>
+                <NotationHandler.import_section uploads={@uploads} />
               </div>
             </div>
           <% end %>
@@ -940,6 +974,20 @@ defmodule LiteskillWeb.ChatLive do
     SharingLive.handle_event(event, params, socket)
   end
 
+  # --- JSON Notation Events ---
+
+  @notation_events NotationHandler.events()
+
+  @impl true
+  def handle_event(event, params, socket) when event in @notation_events do
+    NotationHandler.handle_event(event, params, socket)
+  end
+
+  @impl true
+  def handle_event("validate_import", _params, socket) do
+    {:noreply, socket}
+  end
+
   # --- PubSub Handlers ---
 
   @impl true
@@ -1081,8 +1129,7 @@ defmodule LiteskillWeb.ChatLive do
             messages: messages,
             conversations: conversations,
             conversation: fresh_conv,
-            pending_tool_calls:
-              if(task_alive && db_streaming, do: socket.assigns.pending_tool_calls, else: []),
+            pending_tool_calls: if(task_alive && db_streaming, do: socket.assigns.pending_tool_calls, else: []),
             stream_task_pid: if(still_streaming, do: socket.assigns.stream_task_pid)
           )
 

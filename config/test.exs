@@ -19,7 +19,9 @@ config :liteskill, Liteskill.Repo,
   journal_mode: :wal,
   busy_timeout: 15_000,
   pool: Sandbox,
-  pool_size: 5
+  # SQLite supports only one writer at a time. A single pool connection avoids
+  # "Database busy" errors from multiple connections contending for the write lock.
+  pool_size: 1
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.

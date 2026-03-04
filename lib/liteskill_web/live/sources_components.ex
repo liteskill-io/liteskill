@@ -159,12 +159,21 @@ defmodule LiteskillWeb.SourcesComponents do
     count = if has_sources, do: length(assigns.message.rag_sources), else: 0
     assigns = assign(assigns, :count, count)
 
+    assigns = assign(assigns, :model_id, assigns.message.model_id)
+
     ~H"""
     <div
-      :if={@has_sources || @has_raw_output}
+      :if={@has_sources || @has_raw_output || @model_id}
       class="flex justify-start mb-4"
     >
       <div class="flex items-center gap-1">
+        <span
+          :if={@model_id}
+          class="text-xs text-base-content/40 font-mono px-1"
+          title={@model_id}
+        >
+          {@model_id}
+        </span>
         <button
           :if={@has_sources}
           phx-click="toggle_sources_sidebar"

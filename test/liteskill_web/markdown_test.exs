@@ -104,8 +104,9 @@ defmodule LiteskillWeb.MarkdownTest do
       jsonl = ~S|{"op":"add","path":"/root","value":"main"}|
       md = "```spec\n#{jsonl}\n```"
       {:safe, html} = Markdown.render_streaming(md)
-      assert html =~ ~s(phx-hook="JsonRender")
-      assert html =~ ~s(data-format="jsonl")
+      # During streaming, visual blocks show a placeholder instead of rendering
+      refute html =~ ~s(phx-hook="JsonRender")
+      assert html =~ "Visual response generating"
     end
   end
 
@@ -193,7 +194,9 @@ defmodule LiteskillWeb.MarkdownTest do
         ~s|```json-render\n{"root":{"type":"Card","props":{"title":"Test"},"children":[]}}\n```|
 
       {:safe, html} = Markdown.render_streaming(md)
-      assert html =~ ~s(phx-hook="JsonRender")
+      # During streaming, visual blocks show a placeholder instead of rendering
+      refute html =~ ~s(phx-hook="JsonRender")
+      assert html =~ "Visual response generating"
     end
   end
 
@@ -378,8 +381,10 @@ defmodule LiteskillWeb.MarkdownTest do
       md = "Result:\n\n#{patches}"
       {:safe, html} = Markdown.render_streaming(md)
 
-      assert html =~ ~s(phx-hook="JsonRender")
-      assert html =~ ~s(data-format="jsonl")
+      # During streaming, visual blocks show a placeholder instead of rendering
+      refute html =~ ~s(phx-hook="JsonRender")
+      assert html =~ "Visual response generating"
+      assert html =~ "Result:"
     end
   end
 

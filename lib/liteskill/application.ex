@@ -11,10 +11,13 @@ defmodule Liteskill.Application do
     LiteskillWeb.Plugs.RateLimiter.create_table()
     Liteskill.LlmGateway.TokenBucket.create_table()
 
+    # coveralls-ignore-start — auto-migration only runs in non-test envs
     if !test_env?() do
       {:ok, _, _} =
         Ecto.Migrator.with_repo(Liteskill.Repo, &Ecto.Migrator.run(&1, :up, all: true))
     end
+
+    # coveralls-ignore-stop
 
     # coveralls-ignore-start
     children =

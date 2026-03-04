@@ -65,5 +65,11 @@ RUN echo "=== Tool versions ===" && \
     zig version && \
     echo "=== All tools ready ==="
 
+# -- AppImage support in Docker ------------------------------------------------
+# linuxdeploy (used by Tauri's AppImage bundler) is itself an AppImage.
+# AppImages need FUSE to mount, which isn't available inside Docker.
+# This env var tells AppImage tools to extract-and-run instead.
+ENV APPIMAGE_EXTRACT_AND_RUN=1
+
 # -- Mount point for project source -------------------------------------------
 WORKDIR /build

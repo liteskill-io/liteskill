@@ -18,6 +18,7 @@ defmodule Liteskill.Chat do
     exports: [
       Conversation,
       ConversationAggregate,
+      ConversationNotation,
       Events,
       Message,
       MessageBuilder,

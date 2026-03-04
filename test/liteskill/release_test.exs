@@ -15,7 +15,8 @@ defmodule Liteskill.ReleaseTest do
     test "rollback to a far-future version is a no-op" do
       # Use a version far in the future — no migrations match, so nothing runs.
       # This exercises load_app/0, repos/0, and the Migrator.with_repo path.
-      Sandbox.checkout(Liteskill.Repo)
+      # DataCase setup already owns the sandbox connection via start_owner!,
+      # so switch to :auto mode for the migrator (which needs to commit).
       Sandbox.mode(Liteskill.Repo, :auto)
 
       try do

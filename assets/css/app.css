@@ -279,8 +279,8 @@ html {
   -webkit-app-region: no-drag;
 }
 
-/* macOS traffic light padding — only when in Tauri + macOS.
-   Traffic lights are ~38px from top and ~78px from left. */
+/* macOS traffic light padding — only needed with TitleBarStyle::Overlay.
+   Currently using the native title bar, so this is disabled.
 body[data-platform="macos"] .desktop-titlebar-pad {
   padding-top: 38px;
 }
@@ -288,6 +288,7 @@ body[data-platform="macos"] #sidebar .desktop-sidebar-header {
   padding-top: 42px;
   padding-left: 78px;
 }
+*/
 
 /* Desktop reconnection indicator — subtle bottom-center pill instead of error toast */
 body[data-tauri] #client-error,

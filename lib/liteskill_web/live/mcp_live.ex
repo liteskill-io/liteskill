@@ -68,7 +68,10 @@ defmodule LiteskillWeb.McpLive do
       />
 
       <main class="flex-1 flex flex-col min-w-0">
-        <header class={["px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region", !@sidebar_open && "desktop-titlebar-pad"]}>
+        <header class={[
+          "px-4 py-3 border-b border-base-300 flex-shrink-0 desktop-drag-region",
+          !@sidebar_open && "desktop-titlebar-pad"
+        ]}>
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <button
