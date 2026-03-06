@@ -118,6 +118,16 @@ mix deps.get --only prod
 # container-local paths.
 mix deps.compile --force
 
+# On Windows (MINGW/MSYS), argon2_elixir's Makefile doesn't detect the OS
+# (uname returns MINGW64_NT-*, not Linux/Darwin) so LIB_CFLAGS is empty and
+# the linker tries to build an executable instead of a shared library.
+# Setting CROSSCOMPILE triggers the -shared -fPIC flags.
+case "$TRIPLE" in
+  *-windows-*)
+    export CROSSCOMPILE=1
+    ;;
+esac
+
 npm install --prefix assets
 mix compile
 mix assets.deploy
