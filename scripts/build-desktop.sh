@@ -107,6 +107,17 @@ cd "$PROJECT_ROOT"
 # Ensure HOME is set so mix local.hex/rebar can write to ~/.mix
 export HOME="${HOME:-/root}"
 
+# On Windows (MINGW/MSYS), argon2_elixir's Makefile doesn't detect the OS
+# (uname returns MINGW64_NT-*, not Linux/Darwin) so LIB_CFLAGS is empty and
+# the linker tries to build an executable instead of a shared library.
+# Setting CROSSCOMPILE triggers the -shared -fPIC flags.
+# Must be set before any mix compile/deps.compile.
+case "$TRIPLE" in
+  *-windows-*)
+    export CROSSCOMPILE=1
+    ;;
+esac
+
 mix local.hex --force
 mix local.rebar --force
 mix deps.get --only prod
@@ -117,16 +128,6 @@ mix deps.get --only prod
 # source path for git metadata). Force-recompiling ensures all deps use
 # container-local paths.
 mix deps.compile --force
-
-# On Windows (MINGW/MSYS), argon2_elixir's Makefile doesn't detect the OS
-# (uname returns MINGW64_NT-*, not Linux/Darwin) so LIB_CFLAGS is empty and
-# the linker tries to build an executable instead of a shared library.
-# Setting CROSSCOMPILE triggers the -shared -fPIC flags.
-case "$TRIPLE" in
-  *-windows-*)
-    export CROSSCOMPILE=1
-    ;;
-esac
 
 npm install --prefix assets
 mix compile
