@@ -108,6 +108,75 @@ jobs:
             src-tauri/target/release/bundle/rpm/*.rpm
           if-no-files-found: error
 
+  cross-compile-windows-sidecar:
+    name: Cross-compile Windows sidecar
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libncurses-dev zlib1g-dev libssl-dev xz-utils
+
+      - name: Cache Erlang & Elixir
+        id: beam-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/beam-install.tar.gz
+          key: beam-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-${{ hashFiles('scripts/setup-erlang-elixir.sh') }}
+
+      - name: Compile Erlang & Elixir
+        if: steps.beam-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo bash scripts/setup-erlang-elixir.sh
+          sudo tar czf /tmp/beam-install.tar.gz -C /usr/local .
+
+      - name: Restore Erlang & Elixir from cache
+        if: steps.beam-cache.outputs.cache-hit == 'true'
+        run: sudo tar xzf /tmp/beam-install.tar.gz -C /usr/local
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Zig (required by Burrito)
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Cache Elixir deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-otp${{ env.OTP_VERSION }}-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-otp${{ env.OTP_VERSION }}-
+
+      - name: Build Windows sidecar
+        run: |
+          export HOME="${HOME:-/root}"
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get --only prod
+          mix deps.compile --force
+          npm install --prefix assets
+          mix compile
+          mix assets.deploy
+          BURRITO_TARGET=windows_x86_64 mix release desktop --overwrite
+          mv burrito_out/desktop_windows_x86_64.exe burrito_out/desktop-x86_64-pc-windows-msvc.exe
+
+      - name: Upload Windows sidecar
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-sidecar
+          path: burrito_out/desktop-x86_64-pc-windows-msvc.exe
+          if-no-files-found: error
+
   build-macos:
     name: Build macOS ARM64
     runs-on: macos-14
@@ -172,17 +241,18 @@ jobs:
 
   build-windows:
     name: Build Windows x86_64
+    needs: [cross-compile-windows-sidecar]
     runs-on: windows-2022
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Elixir
-        uses: erlef/setup-beam@v1
+      - name: Download Windows sidecar from Linux cross-compile
+        uses: actions/download-artifact@v4
         with:
-          elixir-version: ${{ env.ELIXIR_VERSION }}
-          otp-version: ${{ env.OTP_VERSION }}
+          name: windows-sidecar
+          path: sidecar
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -197,25 +267,6 @@ jobs:
         shell: bash
         run: command -v cargo-tauri || cargo install tauri-cli
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install Zig (required by Burrito)
-        uses: mlugg/setup-zig@v2
-        with:
-          version: 0.15.2
-
-      - name: Cache Elixir deps
-        uses: actions/cache@v4
-        with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-mix-otp${{ env.OTP_VERSION }}-${{ hashFiles('mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-otp${{ env.OTP_VERSION }}-
-
       - name: Cache Rust target
         uses: actions/cache@v4
         with:
@@ -223,9 +274,9 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      - name: Build Desktop App
+      - name: Build Tauri installer
         shell: bash
-        run: bash scripts/build-desktop.sh x86_64-pc-windows-msvc
+        run: bash scripts/build-tauri-windows.sh sidecar/desktop-x86_64-pc-windows-msvc.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

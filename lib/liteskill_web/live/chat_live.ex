@@ -4,12 +4,15 @@ defmodule LiteskillWeb.ChatLive do
 
   import LiteskillWeb.FormatHelpers, only: [format_cost: 1, format_number: 1]
 
+  alias Liteskill.Acp.Client
+  alias Liteskill.Acp.SessionBridge
   alias Liteskill.Chat
   alias Liteskill.Chat.MessageBuilder
   alias Liteskill.LLM.RagContext
   alias Liteskill.LLM.StreamHandler
   alias Liteskill.McpServers
   alias LiteskillWeb.ChatComponents
+  alias LiteskillWeb.ChatLive.AcpHandler
   alias LiteskillWeb.ChatLive.ConversationsHandler
   alias LiteskillWeb.ChatLive.CostHandler
   alias LiteskillWeb.ChatLive.EditHandler
@@ -29,7 +32,9 @@ defmodule LiteskillWeb.ChatLive do
 
     single_user = Liteskill.SingleUser.enabled?()
 
-    {conversations, available_llm_models, selected_llm_model_id, selected_server_ids, has_admin_access} =
+    {conversations, available_llm_models, selected_llm_model_id, selected_server_ids, has_admin_access, acp_configs,
+     acp_agent_config_id,
+     acp_mode} =
       if connected?(socket) do
         convs =
           if single_user,
@@ -41,19 +46,18 @@ defmodule LiteskillWeb.ChatLive do
             do: Liteskill.LlmModels.list_all_active_models(model_type: "inference"),
             else: Liteskill.LlmModels.list_active_models(user.id, model_type: "inference")
 
-        preferred_id = get_in(user.preferences, ["preferred_llm_model_id"])
+        acp_cfgs =
+          if single_user,
+            do: Liteskill.Acp.list_all_active_agent_configs(),
+            else: Liteskill.Acp.list_active_agent_configs(user.id)
+
         server_ids = McpServers.load_selected_server_ids(user.id)
 
-        model_id =
-          cond do
-            preferred_id && Enum.any?(models, &(&1.id == preferred_id)) -> preferred_id
-            models != [] -> hd(models).id
-            true -> nil
-          end
+        {model_id, acp_id, is_acp} = resolve_preferred_provider(user, models, acp_cfgs)
 
-        {convs, models, model_id, server_ids, Liteskill.Rbac.has_any_admin_permission?(user.id)}
+        {convs, models, model_id, server_ids, Liteskill.Rbac.has_any_admin_permission?(user.id), acp_cfgs, acp_id, is_acp}
       else
-        {[], [], nil, MapSet.new(), false}
+        {[], [], nil, MapSet.new(), false, [], nil, false}
       end
 
     {:ok,
@@ -125,6 +129,12 @@ defmodule LiteskillWeb.ChatLive do
        json_content: nil,
        json_notation: nil
      )
+     |> assign(AcpHandler.assigns())
+     |> assign(
+       acp_mode: acp_mode,
+       acp_agent_configs: acp_configs,
+       acp_agent_config_id: acp_agent_config_id
+     )
      |> allow_upload(:conversation_import, accept: ~w(.json), max_entries: 1, max_file_size: 10_000_000)
      |> then(fn socket ->
        if connected?(socket) && MapSet.size(selected_server_ids) > 0,
@@ -147,6 +157,42 @@ defmodule LiteskillWeb.ChatLive do
        |> push_accent_color()
        |> apply_action(socket.assigns.live_action, params)}
     end
+  end
+
+  defp resolve_preferred_provider(user, models, acp_cfgs) do
+    pref = get_in(user.preferences, ["preferred_provider"])
+    model_ids = MapSet.new(models, & &1.id)
+    acp_ids = MapSet.new(acp_cfgs, & &1.id)
+
+    case pref do
+      %{"type" => "acp", "id" => id} when is_binary(id) ->
+        if id in acp_ids do
+          {List.first(models) && List.first(models).id, id, true}
+        else
+          fallback_llm(user, models, model_ids)
+        end
+
+      %{"type" => "llm", "id" => id} when is_binary(id) ->
+        if id in model_ids do
+          {id, nil, false}
+        else
+          fallback_llm(user, models, model_ids)
+        end
+
+      _ ->
+        fallback_llm(user, models, model_ids)
+    end
+  end
+
+  defp fallback_llm(user, models, model_ids) do
+    legacy_id = get_in(user.preferences, ["preferred_llm_model_id"])
+
+    model_id =
+      if legacy_id && legacy_id in model_ids,
+        do: legacy_id,
+        else: List.first(models) && List.first(models).id
+
+    {model_id, nil, false}
   end
 
   defp push_accent_color(socket) do
@@ -200,6 +246,19 @@ defmodule LiteskillWeb.ChatLive do
     auto_stream = params["auto_stream"] == "1"
     user_id = socket.assigns.current_user.id
 
+    # Skip full reload if already on this conversation (e.g., ACP push_patch for URL update).
+    # PubSub subscription and conversation data are already set up.
+    if socket.assigns.conversation && socket.assigns.conversation.id == conversation_id do
+      assign(socket,
+        page_title: socket.assigns.conversation.title,
+        conversations: Chat.list_conversations(user_id)
+      )
+    else
+      apply_action_show_full(socket, conversation_id, auto_stream, user_id)
+    end
+  end
+
+  defp apply_action_show_full(socket, conversation_id, auto_stream, user_id) do
     # Unsubscribe from previous conversation
     maybe_unsubscribe(socket)
 
@@ -494,8 +553,14 @@ defmodule LiteskillWeb.ChatLive do
                       message={msg}
                     />
                     <%!-- Tool calls for completed messages (inline) --%>
-                    <%= if msg.role == "assistant" && msg.stop_reason == "tool_use" do %>
-                      <%= for tc <- MessageBuilder.tool_calls_for_message(msg) do %>
+                    <%!-- Show when stop_reason is "tool_use" (LLM flow) OR when message has
+                         tool calls recorded (ACP flow where stop_reason is "end_turn") --%>
+                    <% msg_tool_calls =
+                      if msg.role == "assistant",
+                        do: MessageBuilder.tool_calls_for_message(msg),
+                        else: [] %>
+                    <%= if msg_tool_calls != [] do %>
+                      <%= for tc <- msg_tool_calls do %>
                         <McpComponents.tool_call_display
                           tool_call={tc}
                           show_actions={!@auto_confirm_tools && tc.status == "started"}
@@ -573,12 +638,16 @@ defmodule LiteskillWeb.ChatLive do
                       <.icon name="hero-stop-micro" class="size-5" />
                     </button>
                   </.form>
-                  <CostHandler.model_picker
-                    id="model-picker-conversation"
-                    class="mt-1"
-                    available_llm_models={@available_llm_models}
-                    selected_llm_model_id={@selected_llm_model_id}
-                  />
+                  <div class="flex items-center gap-2 mt-1">
+                    <CostHandler.provider_picker
+                      id="provider-picker-conversation"
+                      available_llm_models={@available_llm_models}
+                      selected_llm_model_id={@selected_llm_model_id}
+                      acp_agent_configs={@acp_agent_configs}
+                      acp_agent_config_id={@acp_agent_config_id}
+                      acp_mode={@acp_mode}
+                    />
+                  </div>
                 </div>
               </div>
               <SourcesComponents.sources_sidebar
@@ -631,12 +700,16 @@ defmodule LiteskillWeb.ChatLive do
                   </button>
                 </.form>
                 <div class="flex items-center justify-center gap-2 mt-2">
-                  <CostHandler.model_picker
-                    id="model-picker-new"
+                  <CostHandler.provider_picker
+                    id="provider-picker-new"
                     available_llm_models={@available_llm_models}
                     selected_llm_model_id={@selected_llm_model_id}
+                    acp_agent_configs={@acp_agent_configs}
+                    acp_agent_config_id={@acp_agent_config_id}
+                    acp_mode={@acp_mode}
                   />
                   <CostHandler.cost_limit_button
+                    :if={!@acp_mode}
                     cost_limit={@cost_limit}
                     cost_limit_input={@cost_limit_input}
                     cost_limit_tokens={@cost_limit_tokens}
@@ -644,10 +717,10 @@ defmodule LiteskillWeb.ChatLive do
                   />
                 </div>
                 <p
-                  :if={@available_llm_models == []}
+                  :if={@available_llm_models == [] and @acp_agent_configs == []}
                   class="text-sm text-warning mt-2 px-1"
                 >
-                  No models configured.
+                  No models or agents configured.
                   <.link navigate={~p"/admin/models"} class="link link-primary">
                     Add one in Settings
                   </.link>
@@ -679,6 +752,8 @@ defmodule LiteskillWeb.ChatLive do
       />
 
       <McpComponents.tool_call_modal tool_call={@tool_call_modal} />
+
+      <AcpHandler.permission_modal :if={@acp_permission_request} request={@acp_permission_request} />
 
       <SharingComponents.sharing_modal
         show={@show_sharing}
@@ -810,63 +885,11 @@ defmodule LiteskillWeb.ChatLive do
   end
 
   @impl true
-  def handle_event("send_message", %{"message" => %{"content" => content}}, socket) do
-    content = String.trim(content)
-
-    cond do
-      content == "" ->
-        {:noreply, socket}
-
-      socket.assigns.available_llm_models == [] ->
-        {:noreply, put_flash(socket, :error, "No models configured. Add one in Settings > Models.")}
-
-      true ->
-        user_id = socket.assigns.current_user.id
-        tool_config = ToolHandler.build_tool_config(socket)
-
-        case socket.assigns.conversation do
-          nil ->
-            create_params = %{
-              user_id: user_id,
-              title: ChatHelpers.truncate_title(content),
-              llm_model_id: socket.assigns.selected_llm_model_id
-            }
-
-            case Chat.create_conversation(create_params) do
-              {:ok, conversation} ->
-                case Chat.send_message(conversation.id, user_id, content, tool_config: tool_config) do
-                  {:ok, _message} ->
-                    {:noreply, push_navigate(socket, to: "/c/#{conversation.id}?auto_stream=1")}
-
-                  {:error, reason} ->
-                    {:noreply, put_flash(socket, :error, action_error("send message", reason))}
-                end
-
-              {:error, reason} ->
-                {:noreply, put_flash(socket, :error, action_error("create conversation", reason))}
-            end
-
-          conversation ->
-            case Chat.send_message(conversation.id, user_id, content, tool_config: tool_config) do
-              {:ok, _message} ->
-                {:ok, messages} = Chat.list_messages(conversation.id, user_id)
-                pid = trigger_llm_stream(conversation, user_id, socket, tool_config)
-
-                {:noreply,
-                 assign(socket,
-                   messages: messages,
-                   form: to_form(%{"content" => ""}, as: :message),
-                   streaming: true,
-                   stream_content: "",
-                   stream_error: nil,
-                   pending_tool_calls: [],
-                   stream_task_pid: pid
-                 )}
-
-              {:error, reason} ->
-                {:noreply, put_flash(socket, :error, action_error("send message", reason))}
-            end
-        end
+  def handle_event("send_message", %{"message" => %{"content" => content}} = params, socket) do
+    if socket.assigns.acp_mode do
+      AcpHandler.handle_event("send_acp_message", params, socket)
+    else
+      do_send_message(String.trim(content), socket)
     end
   end
 
@@ -881,37 +904,51 @@ defmodule LiteskillWeb.ChatLive do
 
   @impl true
   def handle_event("cancel_stream", _params, socket) do
-    # Kill the streaming task to stop token burn immediately
-    if pid = socket.assigns.stream_task_pid do
-      Process.exit(pid, :shutdown)
-    end
+    if socket.assigns.acp_mode do
+      # Cancel the ACP agent
+      if pid = socket.assigns[:acp_client_pid] do
+        Client.cancel(pid)
+      end
 
-    {:noreply, recover_stuck_stream(socket)}
+      # Fail the event store stream so the aggregate exits :streaming state
+      if socket.assigns[:acp_message_id] && socket.assigns[:conversation] do
+        stream_id = socket.assigns.conversation.stream_id
+
+        SessionBridge.fail_stream(
+          stream_id,
+          socket.assigns.acp_message_id,
+          "User cancelled"
+        )
+      end
+
+      {:noreply,
+       assign(socket,
+         streaming: false,
+         stream_content: "",
+         stream_error: nil,
+         acp_message_id: nil,
+         pending_tool_calls: []
+       )}
+    else
+      # Kill the streaming task to stop token burn immediately
+      if pid = socket.assigns.stream_task_pid do
+        Process.exit(pid, :shutdown)
+      end
+
+      {:noreply, recover_stuck_stream(socket)}
+    end
   end
 
   @impl true
   def handle_event("retry_message", _params, socket) do
-    conversation = socket.assigns.conversation
-    user_id = socket.assigns.current_user.id
-
-    if conversation do
-      # Use tool config from the last user message (if any) for retry
+    if socket.assigns.conversation do
       last_user_msg =
         socket.assigns.messages
         |> Enum.filter(&(&1.role == "user"))
         |> List.last()
 
       tool_config = if last_user_msg, do: last_user_msg.tool_config
-      pid = trigger_llm_stream(conversation, user_id, socket, tool_config)
-
-      {:noreply,
-       assign(socket,
-         streaming: true,
-         stream_content: "",
-         stream_error: nil,
-         pending_tool_calls: [],
-         stream_task_pid: pid
-       )}
+      trigger_response(socket, tool_config)
     else
       {:noreply, socket}
     end
@@ -929,18 +966,8 @@ defmodule LiteskillWeb.ChatLive do
   @impl true
   def handle_event("confirm_edit", params, socket) do
     case EditHandler.handle_confirm_edit(params, socket) do
-      {:stream, socket, conversation, tool_config} ->
-        pid =
-          trigger_llm_stream(conversation, socket.assigns.current_user.id, socket, tool_config)
-
-        {:noreply,
-         assign(socket,
-           streaming: true,
-           stream_content: "",
-           stream_error: nil,
-           pending_tool_calls: [],
-           stream_task_pid: pid
-         )}
+      {:stream, socket, _conversation, tool_config} ->
+        trigger_response(socket, tool_config)
 
       {:noreply, socket} ->
         {:noreply, socket}
@@ -983,9 +1010,69 @@ defmodule LiteskillWeb.ChatLive do
     NotationHandler.handle_event(event, params, socket)
   end
 
+  @acp_events AcpHandler.events()
+
+  @impl true
+  def handle_event(event, params, socket) when event in @acp_events do
+    AcpHandler.handle_event(event, params, socket)
+  end
+
   @impl true
   def handle_event("validate_import", _params, socket) do
     {:noreply, socket}
+  end
+
+  # --- Send Message Helpers ---
+
+  defp do_send_message("", socket), do: {:noreply, socket}
+
+  defp do_send_message(_content, %{assigns: %{available_llm_models: [], acp_mode: false}} = socket) do
+    {:noreply, put_flash(socket, :error, "No models configured. Add one in Settings > Models.")}
+  end
+
+  defp do_send_message(content, %{assigns: %{conversation: nil}} = socket) do
+    user_id = socket.assigns.current_user.id
+    tool_config = ToolHandler.build_tool_config(socket)
+
+    create_params = %{
+      user_id: user_id,
+      title: ChatHelpers.truncate_title(content),
+      llm_model_id: socket.assigns.selected_llm_model_id
+    }
+
+    with {:ok, conversation} <- Chat.create_conversation(create_params),
+         {:ok, _message} <- Chat.send_message(conversation.id, user_id, content, tool_config: tool_config) do
+      {:noreply, push_navigate(socket, to: "/c/#{conversation.id}?auto_stream=1")}
+    else
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, action_error("send message", reason))}
+    end
+  end
+
+  defp do_send_message(content, socket) do
+    user_id = socket.assigns.current_user.id
+    conversation = socket.assigns.conversation
+    tool_config = ToolHandler.build_tool_config(socket)
+
+    case Chat.send_message(conversation.id, user_id, content, tool_config: tool_config) do
+      {:ok, _message} ->
+        {:ok, messages} = Chat.list_messages(conversation.id, user_id)
+        pid = trigger_llm_stream(conversation, user_id, socket, tool_config)
+
+        {:noreply,
+         assign(socket,
+           messages: messages,
+           form: to_form(%{"content" => ""}, as: :message),
+           streaming: true,
+           stream_content: "",
+           stream_error: nil,
+           pending_tool_calls: [],
+           stream_task_pid: pid
+         )}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, action_error("send message", reason))}
+    end
   end
 
   # --- PubSub Handlers ---
@@ -1021,12 +1108,44 @@ defmodule LiteskillWeb.ChatLive do
   def handle_info(:reload_tool_calls, socket), do: ToolHandler.handle_info(:reload_tool_calls, socket)
 
   def handle_info({:DOWN, _ref, :process, pid, _reason}, socket) do
-    if socket.assigns.streaming && pid == socket.assigns.stream_task_pid do
-      {:noreply, recover_stuck_stream(socket)}
-    else
-      {:noreply, socket}
+    cond do
+      socket.assigns.streaming && pid == socket.assigns.stream_task_pid ->
+        {:noreply, recover_stuck_stream(socket)}
+
+      pid == socket.assigns[:acp_client_pid] ->
+        # The ACP client GenServer died. We must fail the event-store stream so the
+        # conversation aggregate exits :streaming state; otherwise it stays stuck
+        # and the conversation becomes unusable.
+        if socket.assigns[:acp_message_id] && socket.assigns[:conversation] do
+          stream_id = socket.assigns.conversation.stream_id
+
+          SessionBridge.fail_stream(
+            stream_id,
+            socket.assigns.acp_message_id,
+            "ACP agent process terminated unexpectedly"
+          )
+        end
+
+        {:noreply,
+         assign(socket,
+           acp_client_pid: nil,
+           acp_message_id: nil,
+           streaming: false,
+           stream_error: %{title: "ACP agent crashed", detail: "The agent process terminated unexpectedly."}
+         )}
+
+      true ->
+        {:noreply, socket}
     end
   end
+
+  def handle_info({:acp_session_update, _} = msg, socket), do: AcpHandler.handle_info(msg, socket)
+  def handle_info({:acp_session_complete, _} = msg, socket), do: AcpHandler.handle_info(msg, socket)
+  def handle_info({:acp_session_error, _} = msg, socket), do: AcpHandler.handle_info(msg, socket)
+  def handle_info({:acp_session_ready, _} = msg, socket), do: AcpHandler.handle_info(msg, socket)
+  def handle_info({:acp_prompt_complete, _} = msg, socket), do: AcpHandler.handle_info(msg, socket)
+  def handle_info({:acp_client_started, _} = msg, socket), do: AcpHandler.handle_info(msg, socket)
+  def handle_info({:acp_permission_request, _} = msg, socket), do: AcpHandler.handle_info(msg, socket)
 
   def handle_info(_msg, socket), do: {:noreply, socket}
 
@@ -1042,8 +1161,14 @@ defmodule LiteskillWeb.ChatLive do
   end
 
   defp handle_event_store_event(%{event_type: "AssistantChunkReceived", data: data}, socket) do
-    delta = data["delta_text"] || ""
-    assign(socket, stream_content: socket.assigns.stream_content <> delta)
+    # In ACP mode, stream_content is already updated by maybe_append_stream_content
+    # in AcpHandler — skip here to avoid doubling the text.
+    if socket.assigns.acp_mode do
+      socket
+    else
+      delta = data["delta_text"] || ""
+      assign(socket, stream_content: socket.assigns.stream_content <> delta)
+    end
   end
 
   defp handle_event_store_event(%{event_type: "AssistantStreamCompleted"}, socket) do
@@ -1174,6 +1299,34 @@ defmodule LiteskillWeb.ChatLive do
     end
   end
 
+  # Unified response trigger — checks acp_mode and dispatches accordingly.
+  # For ACP: re-prompts the agent with the last user message content.
+  # For LLM: starts a streaming LLM response with the given tool_config.
+  defp trigger_response(socket, tool_config) do
+    if socket.assigns.acp_mode do
+      last_user_msg =
+        socket.assigns.messages
+        |> Enum.filter(&(&1.role == "user"))
+        |> List.last()
+
+      content = if last_user_msg, do: last_user_msg.content, else: ""
+      AcpHandler.prompt_after_edit(content, socket)
+    else
+      conversation = socket.assigns.conversation
+      user_id = socket.assigns.current_user.id
+      pid = trigger_llm_stream(conversation, user_id, socket, tool_config)
+
+      {:noreply,
+       assign(socket,
+         streaming: true,
+         stream_content: "",
+         stream_error: nil,
+         pending_tool_calls: [],
+         stream_task_pid: pid
+       )}
+    end
+  end
+
   defp trigger_llm_stream(conversation, user_id, socket, tool_config) do
     {:ok, messages} = Chat.list_messages(conversation.id, user_id)
 
@@ -1275,6 +1428,10 @@ defmodule LiteskillWeb.ChatLive do
 
       _ ->
         :ok
+    end
+
+    if socket.assigns[:acp_client_pid] && Process.alive?(socket.assigns.acp_client_pid) do
+      Client.stop(socket.assigns.acp_client_pid)
     end
 
     :ok

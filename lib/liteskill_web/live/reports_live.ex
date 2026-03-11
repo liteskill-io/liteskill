@@ -369,6 +369,11 @@ defmodule LiteskillWeb.ReportsLive do
   end
 
   @impl true
+  def handle_event("close_sidebar", _params, socket) do
+    {:noreply, assign(socket, sidebar_open: false)}
+  end
+
+  @impl true
   def handle_event("select_conversation", %{"id" => id}, socket) do
     {:noreply, push_navigate(socket, to: "/c/#{id}")}
   end

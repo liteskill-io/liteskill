@@ -6,6 +6,7 @@ defmodule LiteskillWeb.AdminLive do
 
   use LiteskillWeb, :live_view
 
+  alias LiteskillWeb.AdminLive.AgentsTab
   alias LiteskillWeb.AdminLive.GroupsTab
   alias LiteskillWeb.AdminLive.Helpers
   alias LiteskillWeb.AdminLive.ModelsTab
@@ -29,7 +30,8 @@ defmodule LiteskillWeb.AdminLive do
     :admin_providers,
     :admin_models,
     :admin_roles,
-    :admin_rag
+    :admin_rag,
+    :admin_agents
   ]
 
   def admin_action?(action), do: action in @admin_actions
@@ -47,7 +49,8 @@ defmodule LiteskillWeb.AdminLive do
       ProvidersTab.assigns() ++
       ModelsTab.assigns() ++
       RolesTab.assigns() ++
-      RagTab.assigns()
+      RagTab.assigns() ++
+      AgentsTab.assigns()
   end
 
   # --- LiveView callbacks ---
@@ -118,6 +121,7 @@ defmodule LiteskillWeb.AdminLive do
   defp load_tab_data(socket, :admin_models), do: ModelsTab.load_data(socket)
   defp load_tab_data(socket, :admin_roles), do: RolesTab.load_data(socket)
   defp load_tab_data(socket, :admin_rag), do: RagTab.load_data(socket)
+  defp load_tab_data(socket, :admin_agents), do: AgentsTab.load_data(socket)
 
   # --- Render ---
 
@@ -193,6 +197,9 @@ defmodule LiteskillWeb.AdminLive do
             rag_confirm_input={@rag_confirm_input}
             rag_selected_model_id={@rag_selected_model_id}
             rag_reembed_in_progress={@rag_reembed_in_progress}
+            acp_agents={@acp_agents}
+            editing_acp_agent={@editing_acp_agent}
+            acp_agent_form={@acp_agent_form}
             or_search={@or_search}
             or_results={@or_results}
             or_loading={@or_loading}
@@ -249,6 +256,9 @@ defmodule LiteskillWeb.AdminLive do
   attr :embed_results_all, :list, default: []
   attr :embed_search, :string, default: ""
   attr :embed_results, :list, default: []
+  attr :acp_agents, :list, default: []
+  attr :editing_acp_agent, :any, default: nil
+  attr :acp_agent_form, :map, default: %{}
   attr :settings_mode, :boolean, default: false
   attr :settings_action, :atom, default: nil
   attr :single_user_mode, :boolean, default: false
@@ -319,6 +329,11 @@ defmodule LiteskillWeb.AdminLive do
             to={~p"/admin/rag"}
             active={@live_action == :admin_rag}
           />
+          <.tab_link
+            label="Agents"
+            to={~p"/admin/agents"}
+            active={@live_action == :admin_agents}
+          />
         </div>
       <% end %>
     </div>
@@ -334,7 +349,8 @@ defmodule LiteskillWeb.AdminLive do
             :admin_groups,
             :admin_usage,
             :admin_roles,
-            :admin_rag
+            :admin_rag,
+            :admin_agents
           ],
           do: "max-w-6xl",
           else: "max-w-3xl"
@@ -370,6 +386,7 @@ defmodule LiteskillWeb.AdminLive do
   defp render_tab(%{live_action: :admin_models} = a), do: ModelsTab.render_tab(a)
   defp render_tab(%{live_action: :admin_roles} = a), do: RolesTab.render_tab(a)
   defp render_tab(%{live_action: :admin_rag} = a), do: RagTab.render_tab(a)
+  defp render_tab(%{live_action: :admin_agents} = a), do: AgentsTab.render_tab(a)
 
   # --- Event dispatch ---
 
@@ -380,10 +397,16 @@ defmodule LiteskillWeb.AdminLive do
   @provider_events ~w(new_llm_provider cancel_llm_provider create_llm_provider edit_llm_provider update_llm_provider delete_llm_provider)
   @model_events ~w(new_llm_model cancel_llm_model create_llm_model edit_llm_model update_llm_model delete_llm_model)
   @role_events ~w(new_role cancel_role edit_role create_role update_role delete_role assign_role_user remove_role_user assign_role_group remove_role_group)
+  @agent_events AgentsTab.events()
   @rag_events ~w(rag_select_model rag_cancel_change rag_confirm_input_change rag_confirm_model_change)
   @impl true
   def handle_event("toggle_sidebar", _params, socket) do
     {:noreply, assign(socket, sidebar_open: !socket.assigns.sidebar_open)}
+  end
+
+  @impl true
+  def handle_event("close_sidebar", _params, socket) do
+    {:noreply, assign(socket, sidebar_open: false)}
   end
 
   @impl true
@@ -407,6 +430,8 @@ defmodule LiteskillWeb.AdminLive do
   def handle_event(e, p, s) when e in @role_events, do: RolesTab.handle_event(e, p, s)
   @impl true
   def handle_event(e, p, s) when e in @rag_events, do: RagTab.handle_event(e, p, s)
+  @impl true
+  def handle_event(e, p, s) when e in @agent_events, do: AgentsTab.handle_event(e, p, s)
 
   # --- Profile Event Delegation (for settings_account) ---
 

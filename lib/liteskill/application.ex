@@ -48,6 +48,7 @@ defmodule Liteskill.Application do
           Liteskill.Chat.StreamRegistry,
           {Registry, keys: :unique, name: Liteskill.LlmGateway.GateRegistry},
           {DynamicSupervisor, name: Liteskill.LlmGateway.GateSupervisor, strategy: :one_for_one},
+          {DynamicSupervisor, name: Liteskill.Acp.ClientSupervisor, strategy: :one_for_one},
           Liteskill.LlmGateway.TokenBucket.Sweeper,
           Liteskill.Chat.Projector,
           Liteskill.Chat.StreamRecovery,

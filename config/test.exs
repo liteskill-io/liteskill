@@ -68,7 +68,8 @@ config :wallaby,
   otp_app: :liteskill,
   screenshot_on_failure: true,
   screenshot_dir: "tmp/wallaby_screenshots",
-  js_errors: false
+  js_errors: false,
+  max_wait_time: 15_000
 
 if System.get_env("CI") do
   config :wallaby,

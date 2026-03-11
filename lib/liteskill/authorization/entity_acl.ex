@@ -39,7 +39,8 @@ defmodule Liteskill.Authorization.EntityAcl do
     "schedule",
     "source",
     "team_definition",
-    "wiki_space"
+    "wiki_space",
+    "acp_agent_config"
   ]
   @valid_roles ["owner", "manager", "editor", "viewer"]
 

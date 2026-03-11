@@ -263,6 +263,40 @@ defmodule LiteskillWeb.FeatureCase do
     end)
   end
 
+  @doc """
+  Create an ACP agent config pointing to the mock ACP agent script.
+
+  Options:
+  - `:behavior` — "simple" (default) | "tool_call"
+  - `:response` — response text (default: "Hello from the mock ACP agent!")
+  - `:tool_name` — tool name for tool_call behavior
+  - `:name` — agent config name (default: "Mock ACP Agent")
+
+  Returns the created `%AgentConfig{}`.
+  """
+  def create_acp_agent_config(user, opts \\ []) do
+    behavior = Keyword.get(opts, :behavior, "simple")
+    response = Keyword.get(opts, :response, "Hello from the mock ACP agent!")
+    tool_name = Keyword.get(opts, :tool_name, "mcp__Liteskill_Tools__wiki__list_spaces")
+    script_path = Path.join(File.cwd!(), "test/support/mock_acp_agent.exs")
+
+    {:ok, config} =
+      Liteskill.Acp.create_agent_config(%{
+        name: Keyword.get(opts, :name, "Mock ACP Agent"),
+        command: "elixir",
+        args: [script_path],
+        env: %{
+          "MOCK_ACP_BEHAVIOR" => behavior,
+          "MOCK_ACP_RESPONSE" => response,
+          "MOCK_ACP_TOOL_NAME" => tool_name
+        },
+        instance_wide: true,
+        user_id: user.id
+      })
+
+    config
+  end
+
   defp build_builtin_tool_config(modules) do
     Enum.reduce(modules, {[], %{}}, fn module, {tools_acc, servers_acc} ->
       server = %{builtin: module}

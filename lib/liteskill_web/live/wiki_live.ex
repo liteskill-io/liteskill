@@ -594,6 +594,11 @@ defmodule LiteskillWeb.WikiLive do
     {:noreply, assign(socket, sidebar_open: !socket.assigns.sidebar_open)}
   end
 
+  # Pushed by the JS "nav" hook on mobile after navigation to auto-close the sidebar.
+  def handle_event("close_sidebar", _params, socket) do
+    {:noreply, assign(socket, sidebar_open: false)}
+  end
+
   def handle_event("toggle_wiki_sidebar", _params, socket) do
     {:noreply, assign(socket, wiki_sidebar_open: !socket.assigns.wiki_sidebar_open)}
   end

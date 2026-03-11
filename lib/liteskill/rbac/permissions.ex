@@ -26,6 +26,8 @@ defmodule Liteskill.Rbac.Permissions do
     "wiki_spaces:manage_all",
     "schedules:create",
     "schedules:manage_all",
+    "acp:create",
+    "acp:manage",
     "llm_providers:manage",
     "llm_models:manage",
     "admin:users:view",
@@ -46,7 +48,8 @@ defmodule Liteskill.Rbac.Permissions do
     "sources:create",
     "wiki_spaces:create",
     "schedules:create",
-    "mcp_servers:create"
+    "mcp_servers:create",
+    "acp:create"
   ]
 
   @permission_set MapSet.new(@permissions)

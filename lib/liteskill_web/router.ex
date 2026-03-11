@@ -95,6 +95,7 @@ defmodule LiteskillWeb.Router do
       live "/admin/models", AdminLive, :admin_models
       live "/admin/roles", AdminLive, :admin_roles
       live "/admin/rag", AdminLive, :admin_rag
+      live "/admin/agents", AdminLive, :admin_agents
       live "/admin/setup", SetupLive, :admin_setup
       # Settings routes (single-user mode unified settings page)
       live "/settings", AdminLive, :settings_usage
@@ -105,6 +106,7 @@ defmodule LiteskillWeb.Router do
       live "/settings/account", AdminLive, :settings_account
       live "/settings/groups", AdminLive, :settings_groups
       live "/settings/roles", AdminLive, :settings_roles
+      live "/settings/agents", AdminLive, :settings_agents
     end
   end
 
@@ -173,6 +175,13 @@ defmodule LiteskillWeb.Router do
     get "/:provider/callback", AuthController, :callback
     # coveralls-ignore-stop
     post "/:provider/callback", AuthController, :callback
+  end
+
+  # MCP shim for ACP agents (bearer token auth, no session required)
+  scope "/api/mcp", LiteskillWeb do
+    pipe_through [:api]
+
+    post "/shim", McpShimController, :handle
   end
 
   # API routes

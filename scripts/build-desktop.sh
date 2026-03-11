@@ -13,7 +13,10 @@
 # Supported triples:
 #   x86_64-unknown-linux-gnu
 #   aarch64-apple-darwin
-#   x86_64-pc-windows-msvc
+#   x86_64-apple-darwin
+#
+# For Windows, use scripts/build-tauri-windows.sh with a cross-compiled
+# sidecar (Burrito cross-compiles from Linux with Zig).
 #
 set -euo pipefail
 
@@ -41,12 +44,10 @@ case "$TRIPLE" in
   x86_64-apple-darwin)
     BURRITO_TARGET="macos_x86_64"
     ;;
-  x86_64-pc-windows-msvc)
-    BURRITO_TARGET="windows_x86_64"
-    ;;
   *)
     echo "ERROR: Unsupported target triple: $TRIPLE" >&2
-    echo "Supported: x86_64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-apple-darwin, x86_64-pc-windows-msvc" >&2
+    echo "Supported: x86_64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-apple-darwin" >&2
+    echo "For Windows, use scripts/build-tauri-windows.sh" >&2
     exit 1
     ;;
 esac
@@ -107,17 +108,6 @@ cd "$PROJECT_ROOT"
 # Ensure HOME is set so mix local.hex/rebar can write to ~/.mix
 export HOME="${HOME:-/root}"
 
-# On Windows (MINGW/MSYS), argon2_elixir's Makefile doesn't detect the OS
-# (uname returns MINGW64_NT-*, not Linux/Darwin) so LIB_CFLAGS is empty and
-# the linker tries to build an executable instead of a shared library.
-# Setting CROSSCOMPILE triggers the -shared -fPIC flags.
-# Must be set before any mix compile/deps.compile.
-case "$TRIPLE" in
-  *-windows-*)
-    export CROSSCOMPILE=1
-    ;;
-esac
-
 mix local.hex --force
 mix local.rebar --force
 mix deps.get --only prod
@@ -144,18 +134,10 @@ log "Burrito output:" && ls -la burrito_out/
 # ---------------------------------------------------------------------------
 # Phase 4: Rename Burrito output for Tauri sidecar naming
 # ---------------------------------------------------------------------------
-# Burrito outputs: burrito_out/desktop_<burrito_target>[.exe]
-# Tauri expects:   burrito_out/desktop-<target-triple>[.exe]
-case "$TRIPLE" in
-  *-windows-*)
-    BURRITO_OUT="burrito_out/desktop_${BURRITO_TARGET}.exe"
-    SIDECAR_NAME="burrito_out/desktop-${TRIPLE}.exe"
-    ;;
-  *)
-    BURRITO_OUT="burrito_out/desktop_${BURRITO_TARGET}"
-    SIDECAR_NAME="burrito_out/desktop-${TRIPLE}"
-    ;;
-esac
+# Burrito outputs: burrito_out/desktop_<burrito_target>
+# Tauri expects:   burrito_out/desktop-<target-triple>
+BURRITO_OUT="burrito_out/desktop_${BURRITO_TARGET}"
+SIDECAR_NAME="burrito_out/desktop-${TRIPLE}"
 
 if [ -f "$BURRITO_OUT" ]; then
   mv "$BURRITO_OUT" "$SIDECAR_NAME"
@@ -193,10 +175,6 @@ case "$TRIPLE" in
     # AppImage magic bytes, rejected by glibc's dynamic linker). We build
     # deb+rpm here and create the AppImage manually in Phase 6.
     cargo tauri build --bundles deb,rpm
-    ;;
-  *-windows-*)
-    # Build NSIS installer + MSI on Windows. Tauri auto-detects platform.
-    cargo tauri build --bundles nsis,msi
     ;;
   *)
     cargo tauri build

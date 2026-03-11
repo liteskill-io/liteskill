@@ -20,6 +20,7 @@ defmodule LiteskillWeb do
   use Boundary,
     deps: [
       Liteskill.Accounts,
+      Liteskill.Acp,
       Liteskill.Agents,
       Liteskill.Aggregate,
       Liteskill.Authorization,

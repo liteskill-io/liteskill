@@ -379,7 +379,7 @@ defmodule Liteskill.Chat.Projector do
         tool_call
         |> ToolCall.changeset(%{
           input: data["input"],
-          output: data["output"],
+          output: normalize_tool_output(data["output"]),
           status: "completed",
           duration_ms: data["duration_ms"]
         })
@@ -458,6 +458,12 @@ defmodule Liteskill.Chat.Projector do
   end
 
   defp project_event(_event), do: :ok
+
+  # ToolCall.output is :map — ACP events may contain plain strings from earlier
+  # versions. Wrap them so the Ecto cast succeeds.
+  defp normalize_tool_output(output) when is_map(output), do: output
+  defp normalize_tool_output(output) when is_binary(output), do: %{"text" => output}
+  defp normalize_tool_output(_), do: nil
 
   defp do_rebuild do
     Repo.transaction(

@@ -292,6 +292,106 @@ defmodule Liteskill.Chat.ProjectorTest do
     assert tc.duration_ms == 50
   end
 
+  test "normalizes string and nil tool call output to map", %{user: user} do
+    {stream_id, _} = create_conversation(user)
+    message_id = Ecto.UUID.generate()
+
+    {:ok, events} =
+      Store.append_events(stream_id, 1, [
+        %{
+          event_type: "AssistantStreamStarted",
+          data: %{
+            "message_id" => message_id,
+            "model_id" => "claude",
+            "request_id" => Ecto.UUID.generate(),
+            "timestamp" => DateTime.to_iso8601(DateTime.utc_now())
+          }
+        }
+      ])
+
+    Projector.project_events(stream_id, events)
+
+    # Tool call with string output (ACP agents produce string output)
+    string_tool_id = "tool-string-#{System.unique_integer([:positive])}"
+
+    {:ok, events} =
+      Store.append_events(stream_id, 2, [
+        %{
+          event_type: "ToolCallStarted",
+          data: %{
+            "message_id" => message_id,
+            "tool_use_id" => string_tool_id,
+            "tool_name" => "Bash",
+            "timestamp" => DateTime.to_iso8601(DateTime.utc_now())
+          }
+        }
+      ])
+
+    Projector.project_events(stream_id, events)
+
+    {:ok, events} =
+      Store.append_events(stream_id, 3, [
+        %{
+          event_type: "ToolCallCompleted",
+          data: %{
+            "message_id" => message_id,
+            "tool_use_id" => string_tool_id,
+            "tool_name" => "Bash",
+            "input" => %{},
+            "output" => "file listing output here",
+            "duration_ms" => 10,
+            "timestamp" => DateTime.to_iso8601(DateTime.utc_now())
+          }
+        }
+      ])
+
+    Projector.project_events(stream_id, events)
+
+    tc = Repo.one!(from t in ToolCall, where: t.tool_use_id == ^string_tool_id)
+    assert tc.status == "completed"
+    assert tc.output == %{"text" => "file listing output here"}
+
+    # Tool call with nil output
+    nil_tool_id = "tool-nil-#{System.unique_integer([:positive])}"
+
+    {:ok, events} =
+      Store.append_events(stream_id, 4, [
+        %{
+          event_type: "ToolCallStarted",
+          data: %{
+            "message_id" => message_id,
+            "tool_use_id" => nil_tool_id,
+            "tool_name" => "Read",
+            "timestamp" => DateTime.to_iso8601(DateTime.utc_now())
+          }
+        }
+      ])
+
+    Projector.project_events(stream_id, events)
+
+    {:ok, events} =
+      Store.append_events(stream_id, 5, [
+        %{
+          event_type: "ToolCallCompleted",
+          data: %{
+            "message_id" => message_id,
+            "tool_use_id" => nil_tool_id,
+            "tool_name" => "Read",
+            "input" => %{},
+            "output" => nil,
+            "duration_ms" => 5,
+            "timestamp" => DateTime.to_iso8601(DateTime.utc_now())
+          }
+        }
+      ])
+
+    Projector.project_events(stream_id, events)
+
+    tc = Repo.one!(from t in ToolCall, where: t.tool_use_id == ^nil_tool_id)
+    assert tc.status == "completed"
+    assert is_nil(tc.output)
+  end
+
   test "projects ConversationTitleUpdated event", %{user: user} do
     {stream_id, _} = create_conversation(user)
 

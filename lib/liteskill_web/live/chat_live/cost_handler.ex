@@ -3,6 +3,7 @@ defmodule LiteskillWeb.ChatLive.CostHandler do
 
   use LiteskillWeb, :html
 
+  alias LiteskillWeb.ChatLive.AcpHandler
   alias LiteskillWeb.ChatLive.Helpers, as: ChatHelpers
 
   def assigns do
@@ -18,26 +19,21 @@ defmodule LiteskillWeb.ChatLive.CostHandler do
     ]
   end
 
-  @events ~w(select_llm_model toggle_cost_popover update_cost_limit
+  @events ~w(select_provider select_llm_model toggle_cost_popover update_cost_limit
     clear_cost_limit show_usage_modal close_usage_modal)
 
   def events, do: @events
 
+  def handle_event("select_provider", %{"provider_id" => value}, socket) do
+    case String.split(value, ":", parts: 2) do
+      ["llm", model_id] -> select_llm_provider(model_id, socket)
+      ["acp", agent_config_id] -> select_acp_provider(agent_config_id, socket)
+      _ -> {:noreply, socket}
+    end
+  end
+
   def handle_event("select_llm_model", %{"model_id" => id}, socket) do
-    user = socket.assigns.current_user
-    Liteskill.Accounts.update_preferences(user, %{"preferred_llm_model_id" => id})
-
-    # Keep cost fixed, recalculate tokens for new model
-    tokens =
-      if socket.assigns.cost_limit do
-        ChatHelpers.estimate_tokens(
-          socket.assigns.cost_limit,
-          id,
-          socket.assigns.available_llm_models
-        )
-      end
-
-    {:noreply, assign(socket, selected_llm_model_id: id, cost_limit_tokens: tokens)}
+    select_llm_provider(id, socket)
   end
 
   def handle_event("toggle_cost_popover", _params, socket) do
@@ -139,7 +135,106 @@ defmodule LiteskillWeb.ChatLive.CostHandler do
     {:noreply, assign(socket, show_usage_modal: false)}
   end
 
+  # --- Private ---
+
+  defp select_llm_provider(model_id, socket) do
+    user = socket.assigns.current_user
+
+    Liteskill.Accounts.update_preferences(user, %{
+      "preferred_provider" => %{"type" => "llm", "id" => model_id},
+      "preferred_llm_model_id" => model_id
+    })
+
+    tokens =
+      if socket.assigns.cost_limit do
+        ChatHelpers.estimate_tokens(
+          socket.assigns.cost_limit,
+          model_id,
+          socket.assigns.available_llm_models
+        )
+      end
+
+    if socket.assigns[:acp_mode] do
+      AcpHandler.cleanup_acp_session_public(socket)
+    end
+
+    {:noreply,
+     assign(socket,
+       selected_llm_model_id: model_id,
+       cost_limit_tokens: tokens,
+       acp_mode: false,
+       acp_agent_config_id: nil,
+       acp_client_pid: nil,
+       acp_session_id: nil
+     )}
+  end
+
+  defp select_acp_provider(agent_config_id, socket) do
+    user = socket.assigns.current_user
+
+    Liteskill.Accounts.update_preferences(user, %{
+      "preferred_provider" => %{"type" => "acp", "id" => agent_config_id}
+    })
+
+    if socket.assigns[:acp_mode] do
+      AcpHandler.cleanup_acp_session_public(socket)
+    end
+
+    {:noreply,
+     assign(socket,
+       acp_mode: true,
+       acp_agent_config_id: agent_config_id,
+       acp_client_pid: nil,
+       acp_session_id: nil
+     )}
+  end
+
   # --- Function Components ---
+
+  attr :id, :string, required: true
+  attr :class, :string, default: ""
+  attr :available_llm_models, :list, required: true
+  attr :selected_llm_model_id, :string, default: nil
+  attr :acp_agent_configs, :list, default: []
+  attr :acp_agent_config_id, :string, default: nil
+  attr :acp_mode, :boolean, default: false
+
+  def provider_picker(assigns) do
+    ~H"""
+    <div
+      :if={@available_llm_models != [] or @acp_agent_configs != []}
+      class={["flex items-center gap-1 px-1", @class]}
+    >
+      <.icon name="hero-cpu-chip-micro" class="size-3 text-base-content/40" />
+      <form phx-change="select_provider">
+        <select
+          id={@id}
+          name="provider_id"
+          class="select select-ghost select-xs text-xs text-base-content/50 hover:text-base-content/70 min-h-0 h-6 pl-0"
+        >
+          <optgroup :if={@available_llm_models != []} label="Models">
+            <option
+              :for={m <- @available_llm_models}
+              value={"llm:#{m.id}"}
+              selected={!@acp_mode && m.id == @selected_llm_model_id}
+            >
+              {m.name}
+            </option>
+          </optgroup>
+          <optgroup :if={@acp_agent_configs != []} label="Agents">
+            <option
+              :for={c <- @acp_agent_configs}
+              value={"acp:#{c.id}"}
+              selected={@acp_mode && c.id == @acp_agent_config_id}
+            >
+              {c.name}
+            </option>
+          </optgroup>
+        </select>
+      </form>
+    </div>
+    """
+  end
 
   attr :id, :string, required: true
   attr :class, :string, default: ""
