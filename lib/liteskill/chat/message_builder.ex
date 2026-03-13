@@ -38,15 +38,17 @@ defmodule Liteskill.Chat.MessageBuilder do
   end
 
   defp build_assistant_message(msg, acc) do
-    if msg.stop_reason == "tool_use" do
+    completed_tcs = Enum.filter(msg.tool_calls, &(&1.status == "completed"))
+
+    if msg.stop_reason == "tool_use" || completed_tcs != [] do
+      text = strip_tool_call_markers(msg.content)
+
       text_blocks =
-        if msg.content && msg.content != "" do
-          [%{"text" => msg.content}]
+        if text && text != "" do
+          [%{"text" => text}]
         else
           []
         end
-
-      completed_tcs = Enum.filter(msg.tool_calls, &(&1.status == "completed"))
 
       tool_use_blocks =
         Enum.map(completed_tcs, fn tc ->
@@ -80,8 +82,10 @@ defmodule Liteskill.Chat.MessageBuilder do
         [%{"role" => "user", "content" => tool_results}, assistant_msg | acc]
       end
     else
-      if msg.content && msg.content != "" do
-        [%{"role" => "assistant", "content" => [%{"text" => msg.content}]} | acc]
+      text = strip_tool_call_markers(msg.content)
+
+      if text && text != "" do
+        [%{"role" => "assistant", "content" => [%{"text" => text}]} | acc]
       else
         acc
       end
@@ -155,6 +159,17 @@ defmodule Liteskill.Chat.MessageBuilder do
     |> Enum.reject(fn msg -> msg["content"] == [] end)
     |> merge_consecutive_roles()
   end
+
+  @tool_call_marker_re ~r/\n?<!-- tc:[0-9a-f-]+ -->\n?/
+
+  @doc """
+  Strips tool call position markers from message content.
+
+  Markers are inserted by ACP mode to track where tool calls occurred
+  in the text flow. They must be stripped before sending to LLM or export.
+  """
+  def strip_tool_call_markers(nil), do: nil
+  def strip_tool_call_markers(text), do: String.replace(text, @tool_call_marker_re, "")
 
   defp format_tool_output(nil), do: ""
 

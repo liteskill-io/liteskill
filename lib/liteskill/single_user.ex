@@ -8,7 +8,7 @@ defmodule Liteskill.SingleUser do
 
   alias Liteskill.Accounts
   alias Liteskill.Accounts.User
-  alias Liteskill.LlmModels
+  alias Liteskill.Acp
   alias Liteskill.LlmProviders
   alias Liteskill.Settings
 
@@ -19,14 +19,13 @@ defmodule Liteskill.SingleUser do
 
   @doc """
   Returns true when single-user mode is enabled AND setup has not been dismissed
-  AND any of: no providers, no models, or no embedding model selected.
+  AND neither LLM providers nor ACP agents are configured.
   """
   def setup_needed? do
     enabled?() and
       not Settings.setup_dismissed?() and
-      (LlmProviders.list_all_providers() == [] or
-         LlmModels.list_all_models() == [] or
-         not Settings.embedding_enabled?())
+      LlmProviders.list_all_providers() == [] and
+      Acp.list_all_agent_configs() == []
   end
 
   @doc "Returns the admin user, or nil if not yet provisioned."

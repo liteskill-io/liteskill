@@ -442,6 +442,15 @@ defmodule LiteskillWeb.ChatLive.AcpHandler do
     end
   end
 
+  # Insert tool call position marker into stream_content when a tool call starts
+  defp maybe_append_stream_content(socket, %{
+         "update" => %{"sessionUpdate" => type, "toolCallId" => id, "status" => "pending"}
+       })
+       when type in ["tool_use", "tool_call"] do
+    marker = "\n<!-- tc:#{id} -->\n"
+    assign(socket, stream_content: (socket.assigns[:stream_content] || "") <> marker)
+  end
+
   defp maybe_append_stream_content(socket, _update), do: socket
 
   # Called on LiveView unmount / navigation away. Requires acp_session_id to be

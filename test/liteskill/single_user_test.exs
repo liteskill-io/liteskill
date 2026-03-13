@@ -3,7 +3,6 @@ defmodule Liteskill.SingleUserTest do
 
   alias Liteskill.Accounts
   alias Liteskill.Accounts.User
-  alias Liteskill.LlmModels
   alias Liteskill.LlmProviders
   alias Liteskill.Settings
   alias Liteskill.SingleUser
@@ -88,7 +87,7 @@ defmodule Liteskill.SingleUserTest do
       assert SingleUser.setup_needed?()
     end
 
-    test "returns true when enabled and providers exist but no models", %{admin: admin} do
+    test "returns false when enabled and a provider exists", %{admin: admin} do
       Application.put_env(:liteskill, :single_user_mode, true)
 
       {:ok, _provider} =
@@ -99,71 +98,20 @@ defmodule Liteskill.SingleUserTest do
           user_id: admin.id
         })
 
-      assert SingleUser.setup_needed?()
+      refute SingleUser.setup_needed?()
     end
 
-    test "returns true when enabled and no embedding model selected", %{admin: admin} do
+    test "returns false when enabled and an ACP agent exists", %{admin: admin} do
       Application.put_env(:liteskill, :single_user_mode, true)
 
-      {:ok, provider} =
-        LlmProviders.create_provider(%{
-          name: "Test Provider",
-          provider_type: "anthropic",
-          provider_config: %{},
+      {:ok, _agent} =
+        Liteskill.Acp.create_agent_config(%{
+          name: "Test Agent",
+          command: "test-agent",
           user_id: admin.id
         })
-
-      {:ok, _model} =
-        LlmModels.create_model(%{
-          name: "Test Model",
-          model_id: "claude-3-5-sonnet-20241022",
-          provider_id: provider.id,
-          user_id: admin.id,
-          instance_wide: true
-        })
-
-      # No embedding model selected yet
-      assert SingleUser.setup_needed?()
-    end
-
-    test "returns false when all three configured", %{admin: admin} do
-      Application.put_env(:liteskill, :single_user_mode, true)
-
-      {:ok, provider} =
-        LlmProviders.create_provider(%{
-          name: "Test Provider",
-          provider_type: "anthropic",
-          provider_config: %{},
-          user_id: admin.id
-        })
-
-      {:ok, _model} =
-        LlmModels.create_model(%{
-          name: "Test Model",
-          model_id: "claude-3-5-sonnet-20241022",
-          provider_id: provider.id,
-          user_id: admin.id,
-          instance_wide: true
-        })
-
-      {:ok, embed_model} =
-        LlmModels.create_model(%{
-          name: "Embedding Model",
-          model_id: "amazon.titan-embed-text-v2:0",
-          model_type: "embedding",
-          provider_id: provider.id,
-          user_id: admin.id,
-          instance_wide: true
-        })
-
-      {:ok, _settings} = Settings.update_embedding_model(embed_model.id)
 
       refute SingleUser.setup_needed?()
-
-      # Verify the individual conditions
-      assert LlmProviders.list_all_providers() != []
-      assert LlmModels.list_all_models() != []
-      assert Settings.embedding_enabled?()
     end
 
     test "returns false when setup has been dismissed", %{admin: _admin} do

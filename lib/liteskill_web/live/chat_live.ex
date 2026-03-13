@@ -169,22 +169,22 @@ defmodule LiteskillWeb.ChatLive do
         if id in acp_ids do
           {List.first(models) && List.first(models).id, id, true}
         else
-          fallback_llm(user, models, model_ids)
+          fallback_llm(user, models, model_ids, acp_cfgs)
         end
 
       %{"type" => "llm", "id" => id} when is_binary(id) ->
         if id in model_ids do
           {id, nil, false}
         else
-          fallback_llm(user, models, model_ids)
+          fallback_llm(user, models, model_ids, acp_cfgs)
         end
 
       _ ->
-        fallback_llm(user, models, model_ids)
+        fallback_llm(user, models, model_ids, acp_cfgs)
     end
   end
 
-  defp fallback_llm(user, models, model_ids) do
+  defp fallback_llm(user, models, model_ids, acp_cfgs) do
     legacy_id = get_in(user.preferences, ["preferred_llm_model_id"])
 
     model_id =
@@ -192,7 +192,14 @@ defmodule LiteskillWeb.ChatLive do
         do: legacy_id,
         else: List.first(models) && List.first(models).id
 
-    {model_id, nil, false}
+    if model_id do
+      {model_id, nil, false}
+    else
+      case acp_cfgs do
+        [first | _] -> {nil, first.id, true}
+        [] -> {nil, nil, false}
+      end
+    end
   end
 
   defp push_accent_color(socket) do
@@ -537,36 +544,57 @@ defmodule LiteskillWeb.ChatLive do
                   class="flex-1 overflow-y-auto px-4 py-4"
                 >
                   <%= for msg <- ChatHelpers.display_messages(@messages, @editing_message_id) do %>
-                    <ChatComponents.message_bubble
-                      :if={msg.content && msg.content != ""}
-                      message={msg}
-                      can_edit={msg.role == "user" && !@streaming && @editing_message_id == nil}
-                      editing={@editing_message_id == msg.id}
-                      editing_content={@editing_message_content}
-                      available_tools={@available_tools}
-                      edit_selected_server_ids={@edit_selected_server_ids}
-                      edit_show_tool_picker={@edit_show_tool_picker}
-                      edit_auto_confirm={@edit_auto_confirm_tools}
-                    />
-                    <SourcesComponents.sources_button
-                      :if={@editing_message_id != msg.id && msg.role == "assistant"}
-                      message={msg}
-                    />
-                    <%!-- Tool calls for completed messages (inline) --%>
-                    <%!-- Show when stop_reason is "tool_use" (LLM flow) OR when message has
-                         tool calls recorded (ACP flow where stop_reason is "end_turn") --%>
                     <% msg_tool_calls =
                       if msg.role == "assistant",
                         do: MessageBuilder.tool_calls_for_message(msg),
                         else: [] %>
-                    <%= if msg_tool_calls != [] do %>
-                      <%= for tc <- msg_tool_calls do %>
-                        <McpComponents.tool_call_display
-                          tool_call={tc}
-                          show_actions={!@auto_confirm_tools && tc.status == "started"}
-                        />
+                    <% has_markers = McpComponents.has_tool_call_markers?(msg.content) %>
+                    <%= if has_markers && msg_tool_calls != [] do %>
+                      <%!-- ACP mode: interleave text segments with tool calls at marker positions --%>
+                      <% segments = McpComponents.split_content_segments(msg.content, msg_tool_calls) %>
+                      <%= for segment <- segments do %>
+                        <%= case segment do %>
+                          <% {:text, text} -> %>
+                            <ChatComponents.message_bubble
+                              message={%{msg | content: MessageBuilder.strip_tool_call_markers(text)}}
+                              can_edit={false}
+                              editing={false}
+                              editing_content=""
+                              available_tools={@available_tools}
+                              edit_selected_server_ids={MapSet.new()}
+                              edit_show_tool_picker={false}
+                              edit_auto_confirm={true}
+                            />
+                          <% {:tool_calls, tcs} -> %>
+                            <McpComponents.tool_calls_group
+                              tool_calls={tcs}
+                              auto_confirm={@auto_confirm_tools}
+                            />
+                        <% end %>
                       <% end %>
+                    <% else %>
+                      <%!-- Standard rendering: message bubble then tool calls --%>
+                      <ChatComponents.message_bubble
+                        :if={msg.content && msg.content != ""}
+                        message={msg}
+                        can_edit={msg.role == "user" && !@streaming && @editing_message_id == nil}
+                        editing={@editing_message_id == msg.id}
+                        editing_content={@editing_message_content}
+                        available_tools={@available_tools}
+                        edit_selected_server_ids={@edit_selected_server_ids}
+                        edit_show_tool_picker={@edit_show_tool_picker}
+                        edit_auto_confirm={@edit_auto_confirm_tools}
+                      />
+                      <McpComponents.tool_calls_group
+                        :if={msg_tool_calls != []}
+                        tool_calls={msg_tool_calls}
+                        auto_confirm={@auto_confirm_tools}
+                      />
                     <% end %>
+                    <SourcesComponents.sources_button
+                      :if={@editing_message_id != msg.id && msg.role == "assistant"}
+                      message={msg}
+                    />
                     <ChatComponents.stream_error
                       :if={msg.status == "failed" && msg == List.last(@messages) && !@stream_error}
                       error={
@@ -577,18 +605,46 @@ defmodule LiteskillWeb.ChatLive do
                       }
                     />
                   <% end %>
-                  <div :if={@streaming && @stream_content != ""} class="mb-4 text-base-content">
-                    <div id="streaming-prose" phx-hook="CopyCode" class="prose prose-sm max-w-none">
-                      {LiteskillWeb.Markdown.render_streaming(@stream_content)}
+                  <%!-- Streaming content: render interleaved if markers present --%>
+                  <% stream_has_markers = McpComponents.has_tool_call_markers?(@stream_content) %>
+                  <%= if @streaming && @stream_content != "" && stream_has_markers do %>
+                    <% stream_segments =
+                      McpComponents.split_content_segments(@stream_content, @pending_tool_calls) %>
+                    <%= for segment <- stream_segments do %>
+                      <%= case segment do %>
+                        <% {:text, text} -> %>
+                          <div class="mb-4 text-base-content">
+                            <div class="prose prose-sm max-w-none">
+                              {LiteskillWeb.Markdown.render_streaming(
+                                MessageBuilder.strip_tool_call_markers(text)
+                              )}
+                            </div>
+                          </div>
+                        <% {:tool_calls, tcs} -> %>
+                          <%= for tc <- tcs do %>
+                            <McpComponents.tool_call_display
+                              tool_call={tc}
+                              show_actions={!@auto_confirm_tools && tc.status == "started"}
+                            />
+                          <% end %>
+                      <% end %>
+                    <% end %>
+                  <% else %>
+                    <div :if={@streaming && @stream_content != ""} class="mb-4 text-base-content">
+                      <div id="streaming-prose" phx-hook="CopyCode" class="prose prose-sm max-w-none">
+                        {LiteskillWeb.Markdown.render_streaming(@stream_content)}
+                      </div>
                     </div>
-                  </div>
+                  <% end %>
                   <ChatComponents.streaming_indicator :if={@streaming && @stream_content == ""} />
-                  <%!-- Pending tool calls from streaming message (rendered from socket state, not DB) --%>
-                  <%= for tc <- @pending_tool_calls do %>
-                    <McpComponents.tool_call_display
-                      tool_call={tc}
-                      show_actions={!@auto_confirm_tools && tc.status == "started"}
-                    />
+                  <%!-- Non-interleaved pending tool calls (LLM mode, or no markers yet) --%>
+                  <%= if !stream_has_markers do %>
+                    <%= for tc <- @pending_tool_calls do %>
+                      <McpComponents.tool_call_display
+                        tool_call={tc}
+                        show_actions={!@auto_confirm_tools && tc.status == "started"}
+                      />
+                    <% end %>
                   <% end %>
                   <ChatComponents.stream_error :if={@stream_error} error={@stream_error} />
                 </div>

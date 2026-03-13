@@ -5,6 +5,7 @@ defmodule LiteskillWeb.SetupLive do
   import LiteskillWeb.ErrorHelpers
 
   alias Liteskill.Accounts
+  alias Liteskill.Acp
   alias Liteskill.DataSources
   alias Liteskill.LlmModels
   alias Liteskill.LlmModels.LlmModel
@@ -23,12 +24,13 @@ defmodule LiteskillWeb.SetupLive do
   def mount(_params, _session, socket) do
     mode = if SingleUser.enabled?(), do: :single_user, else: :server
 
-    {llm_providers, llm_models, rag_embedding_models, rag_current_model} =
+    {llm_providers, llm_models, rag_embedding_models, rag_current_model, acp_agent_configs} =
       if connected?(socket) do
         {LlmProviders.list_all_providers(), LlmModels.list_all_models(),
-         LlmModels.list_all_active_models(model_type: "embedding"), Settings.get().embedding_model}
+         LlmModels.list_all_active_models(model_type: "embedding"), Settings.get().embedding_model,
+         Acp.list_all_agent_configs()}
       else
-        {[], [], [], nil}
+        {[], [], [], nil, []}
       end
 
     socket =
@@ -58,7 +60,9 @@ defmodule LiteskillWeb.SetupLive do
         or_loading: false,
         embed_search: "",
         embed_results: [],
-        model_tab: :inference
+        model_tab: :inference,
+        acp_agent_configs: acp_agent_configs,
+        acp_agent_form: to_form(%{}, as: :acp_agent)
       )
       |> load_embed_models()
       |> load_or_models()
@@ -112,7 +116,8 @@ defmodule LiteskillWeb.SetupLive do
       llm_providers: LlmProviders.list_all_providers(),
       llm_models: LlmModels.list_all_models(),
       rag_embedding_models: LlmModels.list_all_active_models(model_type: "embedding"),
-      rag_current_model: settings.embedding_model
+      rag_current_model: settings.embedding_model,
+      acp_agent_configs: Acp.list_all_agent_configs()
     )
     |> load_embed_models()
     |> load_or_models()
@@ -178,6 +183,8 @@ defmodule LiteskillWeb.SetupLive do
               llm_provider_form={@llm_provider_form}
               provider_view={@provider_view}
               openrouter_pending={@openrouter_pending}
+              acp_agent_configs={@acp_agent_configs}
+              acp_agent_form={@acp_agent_form}
               error={@error}
             />
           <% :models -> %>
@@ -192,6 +199,7 @@ defmodule LiteskillWeb.SetupLive do
               embed_search={@embed_search}
               embed_results={@embed_results}
               model_tab={@model_tab}
+              acp_agent_configs={@acp_agent_configs}
               error={@error}
             />
           <% :rag -> %>
@@ -224,7 +232,7 @@ defmodule LiteskillWeb.SetupLive do
   defp step_label(:welcome), do: "Welcome"
   defp step_label(:password), do: "Password"
   defp step_label(:default_permissions), do: "Permissions"
-  defp step_label(:providers), do: "Providers"
+  defp step_label(:providers), do: "AI Setup"
   defp step_label(:models), do: "Models"
   defp step_label(:rag), do: "RAG"
   defp step_label(:data_sources), do: "Data Sources"
@@ -439,6 +447,8 @@ defmodule LiteskillWeb.SetupLive do
   attr :llm_provider_form, :any, required: true
   attr :provider_view, :atom, required: true
   attr :openrouter_pending, :boolean, required: true
+  attr :acp_agent_configs, :list, required: true
+  attr :acp_agent_form, :any, required: true
   attr :error, :string
 
   defp providers_step(%{provider_view: :presets} = assigns) do
@@ -449,22 +459,12 @@ defmodule LiteskillWeb.SetupLive do
       class="card bg-base-100 shadow-xl w-full max-w-2xl mx-auto"
     >
       <div class="card-body">
-        <h2 class="card-title text-2xl">Configure LLM Providers</h2>
+        <h2 class="card-title text-2xl">AI Setup</h2>
         <p class="text-base-content/70">
-          Add at least one LLM provider to enable AI chat.
+          Connect an LLM provider or an AI agent to get started.
         </p>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-          <button
-            type="button"
-            phx-click="setup_providers_show_custom"
-            class="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-base-300 hover:border-base-content/30 hover:bg-base-200 cursor-pointer transition-all"
-          >
-            <span class="text-2xl font-bold">Manual Entry</span>
-            <span class="text-sm text-base-content/60">Any OpenAI-compatible provider</span>
-            <span class="badge badge-ghost badge-sm">API Key</span>
-          </button>
-
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
           <button
             type="button"
             phx-click="setup_openrouter_connect"
@@ -482,11 +482,31 @@ defmodule LiteskillWeb.SetupLive do
             <span class="text-sm text-base-content/60">Access 200+ models</span>
             <%= if @openrouter_pending do %>
               <span class="badge badge-primary badge-sm gap-1">
-                <span class="loading loading-spinner loading-xs"></span> Waiting for authorization...
+                <span class="loading loading-spinner loading-xs"></span> Waiting...
               </span>
             <% else %>
               <span class="badge badge-primary badge-sm">Connect</span>
             <% end %>
+          </button>
+
+          <button
+            type="button"
+            phx-click="setup_providers_show_acp"
+            class="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-secondary/30 bg-secondary/5 hover:border-secondary hover:bg-secondary/10 cursor-pointer transition-all"
+          >
+            <span class="text-2xl font-bold">ACP Agent</span>
+            <span class="text-sm text-base-content/60">Claude Code, Codex, etc.</span>
+            <span class="badge badge-secondary badge-sm">Local Agent</span>
+          </button>
+
+          <button
+            type="button"
+            phx-click="setup_providers_show_custom"
+            class="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-base-300 hover:border-base-content/30 hover:bg-base-200 cursor-pointer transition-all"
+          >
+            <span class="text-2xl font-bold">Manual Entry</span>
+            <span class="text-sm text-base-content/60">Any OpenAI-compatible</span>
+            <span class="badge badge-ghost badge-sm">API Key</span>
           </button>
         </div>
 
@@ -501,6 +521,22 @@ defmodule LiteskillWeb.SetupLive do
                 <span class="badge badge-success badge-xs" />
                 <span class="text-sm font-medium">{p.name}</span>
                 <span class="text-xs text-base-content/50">{p.provider_type}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div :if={@acp_agent_configs != []} class="mt-4">
+          <h4 class="font-semibold text-sm mb-2">Configured Agents</h4>
+          <div class="space-y-1">
+            <div
+              :for={a <- @acp_agent_configs}
+              class="flex items-center justify-between p-2 bg-base-200 rounded"
+            >
+              <div class="flex items-center gap-2">
+                <span class="badge badge-secondary badge-xs" />
+                <span class="text-sm font-medium">{a.name}</span>
+                <span class="text-xs text-base-content/50">{a.command}</span>
               </div>
             </div>
           </div>
@@ -629,6 +665,95 @@ defmodule LiteskillWeb.SetupLive do
     """
   end
 
+  defp providers_step(%{provider_view: :acp_agent} = assigns) do
+    ~H"""
+    <div class="card bg-base-100 shadow-xl w-full max-w-2xl mx-auto">
+      <div class="card-body">
+        <div class="flex items-center gap-2 mb-2">
+          <button type="button" phx-click="setup_providers_show_presets" class="btn btn-ghost btn-sm">
+            <.icon name="hero-arrow-left-micro" class="size-4" /> Back
+          </button>
+          <h2 class="card-title text-2xl">Add ACP Agent</h2>
+        </div>
+        <p class="text-base-content/70">
+          Connect an external AI agent that communicates via the Agent Client Protocol (ACP) over stdio.
+        </p>
+
+        <div class="mt-4 p-4 border border-base-300 rounded-lg">
+          <.form for={@acp_agent_form} phx-submit="setup_create_acp_agent" class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="form-control">
+                <label class="label"><span class="label-text">Name</span></label>
+                <input
+                  type="text"
+                  name="acp_agent[name]"
+                  class="input input-bordered input-sm w-full"
+                  required
+                  placeholder="Claude Code"
+                />
+              </div>
+              <div class="form-control">
+                <label class="label"><span class="label-text">Command</span></label>
+                <input
+                  type="text"
+                  name="acp_agent[command]"
+                  class="input input-bordered input-sm w-full"
+                  required
+                  placeholder="claude"
+                />
+              </div>
+            </div>
+            <div class="form-control">
+              <label class="label"><span class="label-text">Arguments (space-separated)</span></label>
+              <input
+                type="text"
+                name="acp_agent[args]"
+                class="input input-bordered input-sm w-full"
+                placeholder="--acp"
+              />
+            </div>
+            <p :if={@error} class="text-error text-sm">{@error}</p>
+            <button type="submit" class="btn btn-primary btn-sm">Add Agent</button>
+          </.form>
+        </div>
+
+        <div :if={@acp_agent_configs != []} class="mt-4">
+          <h4 class="font-semibold text-sm mb-2">Configured Agents</h4>
+          <div class="space-y-1">
+            <div
+              :for={a <- @acp_agent_configs}
+              class="flex items-center justify-between p-2 bg-base-200 rounded"
+            >
+              <div class="flex items-center gap-2">
+                <span class="badge badge-secondary badge-xs" />
+                <span class="text-sm font-medium">{a.name}</span>
+                <span class="text-xs text-base-content/50">{a.command}</span>
+              </div>
+              <button
+                type="button"
+                phx-click="setup_delete_acp_agent"
+                phx-value-id={a.id}
+                class="btn btn-ghost btn-xs text-error"
+              >
+                <.icon name="hero-x-mark-micro" class="size-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-3 mt-6">
+          <button type="button" phx-click="setup_providers_skip" class="btn btn-ghost flex-1">
+            Skip
+          </button>
+          <button type="button" phx-click="setup_providers_continue" class="btn btn-primary flex-1">
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
   attr :llm_models, :list, required: true
   attr :llm_providers, :list, required: true
   attr :llm_model_form, :any, required: true
@@ -639,6 +764,7 @@ defmodule LiteskillWeb.SetupLive do
   attr :embed_search, :string, default: ""
   attr :embed_results, :list, default: []
   attr :model_tab, :atom, required: true
+  attr :acp_agent_configs, :list, default: []
   attr :error, :string
 
   defp models_step(assigns) do
@@ -661,8 +787,15 @@ defmodule LiteskillWeb.SetupLive do
           and an embedding model if you want RAG.
         </p>
 
+        <div :if={@acp_agent_configs != [] && @llm_providers == []} class="alert alert-info mt-4">
+          <.icon name="hero-information-circle-micro" class="size-5" />
+          <span>
+            You have ACP agents configured. You can skip model setup if you only want to use agents.
+          </span>
+        </div>
+
         <%= if @llm_providers == [] do %>
-          <div class="alert alert-warning mt-4">
+          <div :if={@acp_agent_configs == []} class="alert alert-warning mt-4">
             <.icon name="hero-exclamation-triangle-micro" class="size-5" />
             <span>No providers configured. Go back and add a provider first, or skip for now.</span>
           </div>
@@ -1294,6 +1427,58 @@ defmodule LiteskillWeb.SetupLive do
   @impl true
   def handle_event("setup_providers_skip", _params, socket) do
     {:noreply, advance_step(socket)}
+  end
+
+  # --- Event handlers: ACP Agents ---
+
+  @impl true
+  def handle_event("setup_providers_show_acp", _params, socket) do
+    {:noreply, assign(socket, provider_view: :acp_agent)}
+  end
+
+  @impl true
+  def handle_event("setup_create_acp_agent", %{"acp_agent" => params}, socket) do
+    user_id = socket.assigns.current_user.id
+
+    args =
+      case String.trim(params["args"] || "") do
+        "" -> []
+        args_str -> String.split(args_str)
+      end
+
+    attrs = %{
+      name: params["name"],
+      command: params["command"],
+      args: args,
+      user_id: user_id,
+      instance_wide: true
+    }
+
+    case Acp.create_agent_config(attrs) do
+      {:ok, _config} ->
+        {:noreply,
+         assign(socket,
+           acp_agent_configs: Acp.list_all_agent_configs(),
+           acp_agent_form: to_form(%{}, as: :acp_agent),
+           error: nil
+         )}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, error: action_error("create agent", changeset))}
+    end
+  end
+
+  @impl true
+  def handle_event("setup_delete_acp_agent", %{"id" => id}, socket) do
+    user_id = socket.assigns.current_user.id
+
+    case Acp.delete_agent_config(id, user_id) do
+      {:ok, _} ->
+        {:noreply, assign(socket, acp_agent_configs: Acp.list_all_agent_configs(), error: nil)}
+
+      {:error, _reason} ->
+        {:noreply, assign(socket, error: "Failed to delete agent.")}
+    end
   end
 
   # --- Event handlers: Model Tab ---

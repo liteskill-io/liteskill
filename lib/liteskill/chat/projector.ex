@@ -376,9 +376,21 @@ defmodule Liteskill.Chat.Projector do
         Logger.warning("ToolCall not found for tool_use_id=#{data["tool_use_id"]}, skipping")
 
       tool_call ->
+        # Only overwrite input if the event carries non-empty input.
+        # ACP progressive updates populate input before completion,
+        # so avoid clobbering with the empty map from the event.
+        input =
+          case data["input"] do
+            # coveralls-ignore-start — ToolCallCompleted always includes "input" key
+            nil -> tool_call.input
+            # coveralls-ignore-stop
+            empty when empty == %{} -> tool_call.input
+            provided -> provided
+          end
+
         tool_call
         |> ToolCall.changeset(%{
-          input: data["input"],
+          input: input,
           output: normalize_tool_output(data["output"]),
           status: "completed",
           duration_ms: data["duration_ms"]

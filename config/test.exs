@@ -75,9 +75,21 @@ if System.get_env("CI") do
   config :wallaby,
     chromedriver: [
       capabilities: %{
-        "goog:chromeOptions" => %{
-          args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
-        }
+        chromeOptions: %{
+          args: [
+            "--no-sandbox",
+            "--headless",
+            "--disable-gpu",
+            "--disable-dev-shm-usage",
+            "--fullscreen",
+            "window-size=1280,800",
+            "--user-agent=Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36"
+          ]
+        },
+        javascriptEnabled: false,
+        loadImages: false,
+        unhandledPromptBehavior: "accept",
+        loggingPrefs: %{browser: "DEBUG"}
       }
     ]
 end

@@ -7,9 +7,13 @@ defmodule Liteskill.Acp.SessionBridge do
   model as native LLM streams.
   """
 
+  import Ecto.Query
+
   alias Liteskill.Aggregate.Loader
   alias Liteskill.Chat.ConversationAggregate
   alias Liteskill.Chat.Projector
+  alias Liteskill.Chat.ToolCall
+  alias Liteskill.Repo
 
   require Logger
 
@@ -52,6 +56,9 @@ defmodule Liteskill.Acp.SessionBridge do
 
       {:tool_result, tool_call_id, result, tool_name} ->
         handle_tool_result(stream_id, message_id, tool_call_id, result, tool_name)
+
+      {:tool_input_update, tool_call_id, input} ->
+        handle_tool_input_update(tool_call_id, input)
 
       {:plan, _plan} ->
         :ok
@@ -173,7 +180,13 @@ defmodule Liteskill.Acp.SessionBridge do
     {:tool_result, id, result, tool_name}
   end
 
-  # Progressive tool_call_update (input streaming) — ignore
+  # Progressive tool_call_update with input — capture input for display
+  defp classify_update(%{"sessionUpdate" => "tool_call_update", "toolCallId" => id, "rawInput" => input})
+       when input != %{} do
+    {:tool_input_update, id, input}
+  end
+
+  # Progressive tool_call_update (no input or empty input) — ignore
   defp classify_update(%{"sessionUpdate" => "tool_call_update"}) do
     :ignored
   end
@@ -277,6 +290,11 @@ defmodule Liteskill.Acp.SessionBridge do
       {:error, reason} -> Logger.error("ACP SessionBridge: failed to record tool result: #{inspect(reason)}")
     end
 
+    :ok
+  end
+
+  defp handle_tool_input_update(tool_call_id, input) do
+    Repo.update_all(from(tc in ToolCall, where: tc.tool_use_id == ^tool_call_id), set: [input: input])
     :ok
   end
 

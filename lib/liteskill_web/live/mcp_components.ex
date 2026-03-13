@@ -273,6 +273,135 @@ defmodule LiteskillWeb.McpComponents do
     """
   end
 
+  @tool_call_marker_re ~r/\n?<!-- tc:([0-9a-f-]+) -->\n?/
+
+  @doc """
+  Splits message content by tool call markers and returns a list of
+  `{:text, string}` and `{:tool_calls, [tool_call]}` segments for
+  interleaved rendering.
+
+  Tool call markers (`<!-- tc:UUID -->`) are inserted by ACP mode to track
+  where tool calls occurred in the text flow. Consecutive markers are grouped.
+  """
+  def split_content_segments(content, tool_calls) do
+    tc_map = Map.new(tool_calls, &{&1.tool_use_id, &1})
+
+    parts = Regex.split(@tool_call_marker_re, content || "", include_captures: true)
+
+    {segments, pending_tcs} =
+      Enum.reduce(parts, {[], []}, fn part, {segs, pending} ->
+        case Regex.run(@tool_call_marker_re, part) do
+          [_full, id] ->
+            case Map.get(tc_map, id) do
+              nil -> {segs, pending}
+              tc -> {segs, pending ++ [tc]}
+            end
+
+          nil ->
+            # Text segment — flush any pending tool calls first
+            segs =
+              if pending == [] do
+                segs
+              else
+                [{:tool_calls, pending} | segs]
+              end
+
+            text = String.trim(part)
+
+            if text == "" do
+              {segs, []}
+            else
+              {[{:text, part} | segs], []}
+            end
+        end
+      end)
+
+    # Flush trailing tool calls
+    segments =
+      if pending_tcs == [] do
+        segments
+      else
+        [{:tool_calls, pending_tcs} | segments]
+      end
+
+    Enum.reverse(segments)
+  end
+
+  @doc """
+  Returns true if content contains tool call position markers.
+  """
+  def has_tool_call_markers?(nil), do: false
+  def has_tool_call_markers?(content), do: Regex.match?(@tool_call_marker_re, content)
+
+  attr :tool_calls, :list, required: true
+  attr :auto_confirm, :boolean, default: true
+
+  def tool_calls_group(assigns) do
+    count = length(assigns.tool_calls)
+
+    status_counts = Enum.frequencies_by(assigns.tool_calls, & &1.status)
+
+    server_names =
+      assigns.tool_calls
+      |> Enum.map(fn tc ->
+        {server, _tool} = split_tool_name(tc.tool_name)
+        server
+      end)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.uniq()
+
+    assigns =
+      assign(assigns,
+        count: count,
+        status_counts: status_counts,
+        server_names: server_names
+      )
+
+    ~H"""
+    <%= if @count <= 2 do %>
+      <.tool_call_display
+        :for={tc <- @tool_calls}
+        tool_call={tc}
+        show_actions={!@auto_confirm && tc.status == "started"}
+      />
+    <% else %>
+      <details class="mb-2 group/tc">
+        <summary class="cursor-pointer select-none inline-flex items-center gap-2 bg-base-200/50 border border-base-300 rounded-lg px-3 py-1.5 text-xs hover:bg-base-200 transition-colors [&::-webkit-details-marker]:hidden list-none">
+          <.icon name="hero-wrench-screwdriver-micro" class="size-3.5 text-base-content/50 shrink-0" />
+          <span class="font-medium">{@count} tool calls</span>
+          <span :if={@server_names != []} class="text-base-content/60">
+            ({Enum.join(@server_names, ", ")})
+          </span>
+          <span
+            :for={{status, n} <- @status_counts}
+            class={[
+              "badge badge-xs",
+              case status do
+                "started" -> "badge-warning"
+                "completed" -> "badge-success"
+                _ -> "badge-ghost"
+              end
+            ]}
+          >
+            {n} {status}
+          </span>
+          <.icon
+            name="hero-chevron-right-micro"
+            class="size-3 text-base-content/40 transition-transform group-open/tc:rotate-90"
+          />
+        </summary>
+        <div class="mt-1 ml-2 pl-2 border-l-2 border-base-300/50">
+          <.tool_call_display
+            :for={tc <- @tool_calls}
+            tool_call={tc}
+            show_actions={!@auto_confirm && tc.status == "started"}
+          />
+        </div>
+      </details>
+    <% end %>
+    """
+  end
+
   attr :tool_call, :map, default: nil
 
   def tool_call_modal(assigns) do

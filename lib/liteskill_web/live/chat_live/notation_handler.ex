@@ -98,7 +98,13 @@ defmodule LiteskillWeb.ChatLive.NotationHandler do
       <div class="flex items-center gap-2 px-4 py-2 border-b border-base-300 bg-base-200/50 flex-shrink-0">
         <span class="text-sm font-semibold text-base-content/70">JSON Notation</span>
         <div class="flex-1" />
-        <button phx-click="download_json" class="btn btn-ghost btn-xs" title="Download">
+        <button
+          id="download-json-btn"
+          phx-click="download_json"
+          phx-hook="DownloadJson"
+          class="btn btn-ghost btn-xs"
+          title="Download"
+        >
           <.icon name="hero-arrow-down-tray-micro" class="size-4" />
         </button>
         <button
