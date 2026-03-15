@@ -6,7 +6,7 @@ defmodule Liteskill.Desktop do
   for the Tauri desktop app with SQLite database.
   """
 
-  use Boundary, top_level?: true, deps: [], exports: []
+  use Boundary, top_level?: true, deps: [Liteskill.Defaults], exports: []
 
   @doc "Returns true when running in desktop mode."
   @spec enabled?() :: boolean()
@@ -17,7 +17,7 @@ defmodule Liteskill.Desktop do
   @doc "Returns the platform-specific application data directory."
   @spec data_dir() :: String.t()
   def data_dir do
-    Application.get_env(:liteskill, :desktop_data_dir) || default_data_dir()
+    Application.get_env(:liteskill, :desktop_data_dir) || Liteskill.Defaults.data_dir()
   end
 
   @doc "Returns true when running on Windows."
@@ -84,37 +84,6 @@ defmodule Liteskill.Desktop do
       File.mkdir_p!(Path.dirname(path))
       File.write!(path, Jason.encode!(config, pretty: true))
       config
-    end
-  end
-
-  defp default_data_dir do
-    case :os.type() do
-      # coveralls-ignore-start
-      {:unix, :darwin} ->
-        Path.join(System.get_env("HOME", "~"), "Library/Application Support/Liteskill")
-
-      # coveralls-ignore-stop
-
-      # coveralls-ignore-start
-      {:unix, _} ->
-        xdg =
-          System.get_env(
-            "XDG_DATA_HOME",
-            Path.join(System.get_env("HOME", "~"), ".local/share")
-          )
-
-        Path.join(xdg, "liteskill")
-
-      # coveralls-ignore-stop
-
-      # coveralls-ignore-start
-      {:win32, _} ->
-        Path.join(
-          System.get_env("APPDATA", "C:/Users/Default/AppData/Roaming"),
-          "Liteskill"
-        )
-
-        # coveralls-ignore-stop
     end
   end
 end

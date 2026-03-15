@@ -122,6 +122,8 @@ encryption_enabled? = System.get_env("LITESKILL_ENCRYPTION") in ~w(true 1 yes)
 
 # Desktop mode: bundled PostgreSQL, single-user, no external dependencies
 if System.get_env("LITESKILL_DESKTOP") == "true" do
+  # Platform-specific data directory (same logic as Liteskill.Defaults.data_dir/0,
+  # inlined here because runtime.exs runs before application code in releases).
   desktop_data_dir =
     case :os.type() do
       {:unix, :darwin} ->
@@ -190,31 +192,32 @@ if System.get_env("LITESKILL_DESKTOP") == "true" do
 end
 
 if config_env() == :prod and System.get_env("LITESKILL_DESKTOP") != "true" do
-  database_path =
-    System.get_env("DATABASE_PATH") ||
-      raise """
-      environment variable DATABASE_PATH is missing.
-      Set it to the path for the SQLite database file, e.g. /var/lib/liteskill/liteskill.db
-      """
+  # Platform-specific data directory (same logic as Liteskill.Defaults.data_dir/0,
+  # inlined here because runtime.exs runs before application code in releases).
+  default_data_dir =
+    case :os.type() do
+      {:unix, :darwin} ->
+        Path.join(System.get_env("HOME", "~"), "Library/Application Support/Liteskill")
+
+      {:unix, _} ->
+        xdg =
+          System.get_env("XDG_DATA_HOME", Path.join(System.get_env("HOME", "~"), ".local/share"))
+
+        Path.join(xdg, "liteskill")
+
+      {:win32, _} ->
+        Path.join(System.get_env("APPDATA", "C:/Users/Default/AppData/Roaming"), "Liteskill")
+    end
+
+  # DATABASE_PATH defaults to <data_dir>/liteskill.db when not set.
+  database_path = System.get_env("DATABASE_PATH") || Path.join(default_data_dir, "liteskill.db")
 
   # --- Auto-generate secret_key_base ---
   secrets_dir =
     if secrets_file = System.get_env("LITESKILL_SECRETS_FILE") do
       Path.dirname(secrets_file)
     else
-      case :os.type() do
-        {:unix, :darwin} ->
-          Path.join(System.get_env("HOME", "~"), "Library/Application Support/Liteskill")
-
-        {:unix, _} ->
-          xdg =
-            System.get_env("XDG_DATA_HOME", Path.join(System.get_env("HOME", "~"), ".local/share"))
-
-          Path.join(xdg, "liteskill")
-
-        {:win32, _} ->
-          Path.join(System.get_env("APPDATA", "C:/Users/Default/AppData/Roaming"), "Liteskill")
-      end
+      default_data_dir
     end
 
   secrets_path = System.get_env("LITESKILL_SECRETS_FILE") || Path.join(secrets_dir, "secrets.json")
