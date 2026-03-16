@@ -407,12 +407,22 @@ defmodule Liteskill.Chat.ConversationAggregate do
 
   def apply_event(state, %{event_type: "ConversationTruncated", data: data}) do
     message_id = data["message_id"]
-    # Messages are newest-first. Drop the target and everything newer than it.
-    kept =
-      state.messages
-      |> Enum.drop_while(&(&1.id != message_id))
-      |> Enum.drop(1)
 
-    %{state | messages: kept, status: :active, current_stream: nil}
+    if Enum.any?(state.messages, &(&1.id == message_id)) do
+      # Messages are newest-first. Drop the target and everything newer than it.
+      kept =
+        state.messages
+        |> Enum.drop_while(&(&1.id != message_id))
+        |> Enum.drop(1)
+
+      %{state | messages: kept, status: :active, current_stream: nil}
+    else
+      Logger.warning(
+        "ConversationTruncated: message #{message_id} not found in aggregate state — " <>
+          "skipping truncation to prevent state corruption"
+      )
+
+      %{state | status: :active, current_stream: nil}
+    end
   end
 end

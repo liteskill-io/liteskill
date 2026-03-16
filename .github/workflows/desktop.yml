@@ -38,6 +38,8 @@ jobs:
             libayatana-appindicator3-dev \
             libncurses-dev \
             zlib1g-dev \
+            libglib2.0-bin \
+            libgdk-pixbuf-2.0-dev \
             file xz-utils pkg-config
 
       - name: Cache Erlang & Elixir
@@ -167,7 +169,11 @@ jobs:
           npm install --prefix assets
           mix compile
           mix assets.deploy
+          # Patch NIFs: download Windows precompiled MDEx + cross-compile argon2
+          bash scripts/patch-windows-nifs.sh
           BURRITO_TARGET=windows_x86_64 mix release desktop --overwrite
+          # Verify NIFs are present in the release
+          bash scripts/verify-windows-nifs.sh
           mv burrito_out/desktop_windows_x86_64.exe burrito_out/desktop-x86_64-pc-windows-msvc.exe
 
       - name: Upload Windows sidecar

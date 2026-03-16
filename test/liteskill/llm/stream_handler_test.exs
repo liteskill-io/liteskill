@@ -828,6 +828,82 @@ defmodule Liteskill.LLM.StreamHandlerTest do
       refute tc_completed.data["output"]["error"]
     end
 
+    test "manual confirm enforces total deadline across multiple decisions", %{stream_id: stream_id} do
+      tool_use_id_1 = "toolu_#{System.unique_integer([:positive])}"
+      tool_use_id_2 = "toolu_#{System.unique_integer([:positive])}"
+
+      tool_calls = [
+        %{tool_use_id: tool_use_id_1, name: "tool_a", input: %{}},
+        %{tool_use_id: tool_use_id_2, name: "tool_b", input: %{}}
+      ]
+
+      tools = [
+        %{"toolSpec" => %{"name" => "tool_a", "description" => "Tool A"}},
+        %{"toolSpec" => %{"name" => "tool_b", "description" => "Tool B"}}
+      ]
+
+      approval_topic = "tool_approval:#{stream_id}"
+      test_pid = self()
+
+      # Approve the first tool after 100ms, but leave the second tool unapproved.
+      # With a 200ms total timeout, the second tool should be rejected because the
+      # deadline has been partially consumed by the first decision's delay.
+      spawn(fn ->
+        Phoenix.PubSub.subscribe(Liteskill.PubSub, "event_store:#{stream_id}")
+        send(test_pid, :approver_subscribed)
+
+        wait = fn wait ->
+          receive do
+            {:events, _, events} ->
+              if !Enum.any?(events, &(&1.event_type == "ToolCallStarted")) do
+                wait.(wait)
+              end
+          after
+            5000 -> :timeout
+          end
+        end
+
+        wait.(wait)
+
+        # Delay first approval to eat into the deadline
+        Process.sleep(100)
+
+        Phoenix.PubSub.broadcast(
+          Liteskill.PubSub,
+          approval_topic,
+          {:tool_decision, tool_use_id_1, :approved}
+        )
+
+        # Never send a decision for tool_use_id_2 — it should time out
+        send(test_pid, :first_approval_sent)
+      end)
+
+      assert_receive :approver_subscribed, 1000
+
+      assert :ok =
+               StreamHandler.handle_stream(stream_id, [%{role: :user, content: "test"}],
+                 model_id: "test-model",
+                 stream_fn: tool_call_stream_fn("", tool_calls),
+                 tools: tools,
+                 tool_servers: %{"tool_a" => %{builtin: FakeToolServer}},
+                 auto_confirm: false,
+                 tool_approval_timeout_ms: 200
+               )
+
+      assert_receive :first_approval_sent, 5000
+
+      events = Store.read_stream_forward(stream_id)
+      tc_events = Enum.filter(events, &(&1.event_type == "ToolCallCompleted"))
+
+      tool_a_event = Enum.find(tc_events, &(&1.data["tool_name"] == "tool_a"))
+      tool_b_event = Enum.find(tc_events, &(&1.data["tool_name"] == "tool_b"))
+
+      # tool_a was approved and executed
+      refute tool_a_event.data["output"]["error"]
+      # tool_b was never approved and should have been rejected by deadline
+      assert tool_b_event.data["output"]["error"] =~ "rejected by user"
+    end
+
     test "records text chunks via on_text_chunk callback", %{stream_id: stream_id} do
       assert :ok =
                StreamHandler.handle_stream(stream_id, [%{role: :user, content: "test"}],
@@ -1911,6 +1987,172 @@ defmodule Liteskill.LLM.StreamHandlerTest do
 
     test "does nothing when no ref" do
       assert StreamHandler.gateway_checkin([gateway_provider_id: "prov-1"], :ok) == nil
+    end
+  end
+
+  describe "gateway slot release on retry" do
+    test "releases gateway slot before retrying on retryable error", %{user: user} do
+      {:ok, conv} = Chat.create_conversation(%{user_id: user.id})
+      {:ok, _msg} = Chat.send_message(conv.id, user.id, "test")
+
+      provider_id = "retry-release-#{System.unique_integer([:positive])}"
+      counter = retry_counter()
+
+      retry_fn = fn _model, _msgs, on_chunk, _opts ->
+        count = next_count(counter)
+
+        if count < 1 do
+          {:error, %{status: 503, body: "unavailable"}}
+        else
+          on_chunk.("ok")
+          {:ok, "ok", []}
+        end
+      end
+
+      # Checkout a gateway slot so we can verify it gets released during retry
+      {:ok, ref} = ProviderGate.checkout(provider_id)
+      # Checkin right away — we just need it started
+      ProviderGate.checkin(provider_id, ref, :ok)
+
+      llm_model = %LlmModel{
+        model_id: "test-model",
+        provider_id: provider_id,
+        provider: %LlmProvider{
+          provider_type: "anthropic",
+          api_key: "test-key",
+          provider_config: %{}
+        }
+      }
+
+      assert :ok =
+               StreamHandler.handle_stream(
+                 conv.stream_id,
+                 [%{role: :user, content: "test"}],
+                 llm_model: llm_model,
+                 stream_fn: retry_fn,
+                 backoff_ms: 1,
+                 user_id: user.id,
+                 conversation_id: conv.id
+               )
+
+      Agent.stop(counter)
+
+      # Verify the gateway is not stuck — we can checkout again
+      {:ok, ref2} = ProviderGate.checkout(provider_id)
+      ProviderGate.checkin(provider_id, ref2, :ok)
+    end
+
+    test "releases gateway slot when all retries exhausted", %{user: user} do
+      {:ok, conv} = Chat.create_conversation(%{user_id: user.id})
+      {:ok, _msg} = Chat.send_message(conv.id, user.id, "test")
+
+      provider_id = "retry-exhaust-#{System.unique_integer([:positive])}"
+
+      # Pre-warm the ProviderGate
+      {:ok, ref} = ProviderGate.checkout(provider_id)
+      ProviderGate.checkin(provider_id, ref, :ok)
+
+      llm_model = %LlmModel{
+        model_id: "test-model",
+        provider_id: provider_id,
+        provider: %LlmProvider{
+          provider_type: "anthropic",
+          api_key: "test-key",
+          provider_config: %{}
+        }
+      }
+
+      assert {:error, {"max_retries_exceeded", _}} =
+               StreamHandler.handle_stream(
+                 conv.stream_id,
+                 [%{role: :user, content: "test"}],
+                 llm_model: llm_model,
+                 stream_fn: error_stream_fn(%{status: 503, body: "unavailable"}),
+                 backoff_ms: 1,
+                 user_id: user.id,
+                 conversation_id: conv.id
+               )
+
+      # Verify the gateway slot was released — we can still checkout
+      {:ok, ref2} = ProviderGate.checkout(provider_id)
+      ProviderGate.checkin(provider_id, ref2, :ok)
+    end
+  end
+
+  describe "gateway slot release on cost_limit_exceeded" do
+    test "reports error to gateway on cost limit exceeded in tool loop", %{user: user} do
+      {:ok, conv} = Chat.create_conversation(%{user_id: user.id})
+      {:ok, _msg} = Chat.send_message(conv.id, user.id, "test")
+
+      provider_id = "cost-limit-gate-#{System.unique_integer([:positive])}"
+
+      # Pre-warm the ProviderGate
+      {:ok, ref} = ProviderGate.checkout(provider_id)
+      ProviderGate.checkin(provider_id, ref, :ok)
+
+      tools = [
+        %{
+          "toolSpec" => %{
+            "name" => "search",
+            "description" => "search something",
+            "inputSchema" => %{"json" => %{"type" => "object"}}
+          }
+        }
+      ]
+
+      tool_calls = [
+        %{tool_use_id: "tc-1", name: "search", input: %{"query" => "test"}}
+      ]
+
+      usage = %{
+        input_tokens: 1_000_000,
+        output_tokens: 500_000,
+        total_tokens: 1_500_000,
+        input_cost: 1.0,
+        output_cost: 1.0,
+        total_cost: 2.0
+      }
+
+      stream_fn = fn _model_id, _messages, on_chunk, _opts ->
+        round = Process.get(:stream_fn_round_gate, 0)
+        Process.put(:stream_fn_round_gate, round + 1)
+
+        if round == 0 do
+          on_chunk.("Searching.")
+          {:ok, "Searching.", tool_calls, usage}
+        else
+          on_chunk.("Done.")
+          {:ok, "Done.", []}
+        end
+      end
+
+      llm_model = %LlmModel{
+        model_id: "test-model",
+        provider_id: provider_id,
+        provider: %LlmProvider{
+          provider_type: "anthropic",
+          api_key: "test-key",
+          provider_config: %{}
+        }
+      }
+
+      assert {:error, :cost_limit_exceeded} =
+               StreamHandler.handle_stream(
+                 conv.stream_id,
+                 [%{role: :user, content: "test"}],
+                 llm_model: llm_model,
+                 stream_fn: stream_fn,
+                 tools: tools,
+                 tool_servers: %{"search" => %{builtin: FakeToolServer}},
+                 auto_confirm: true,
+                 cost_limit: Decimal.new("0.0001"),
+                 conversation_id: conv.id,
+                 user_id: user.id
+               )
+
+      # Verify the gateway slot was properly released — we can still checkout
+      {:ok, ref2} = ProviderGate.checkout(provider_id)
+      ProviderGate.checkin(provider_id, ref2, :ok)
     end
   end
 

@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev libgtk-3-dev libayatana-appindicator3-dev \
     file xz-utils unzip pkg-config wget \
     libncurses-dev zlib1g-dev \
+    libglib2.0-bin libgdk-pixbuf-2.0-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # -- Erlang OTP + Elixir (compiled from source) -------------------------------

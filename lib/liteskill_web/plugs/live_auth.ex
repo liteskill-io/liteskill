@@ -33,10 +33,15 @@ defmodule LiteskillWeb.Plugs.LiveAuth do
             {session_record, user} ->
               maybe_touch_session(session_record)
 
-              if User.setup_required?(user) do
-                {:halt, redirect(socket, to: "/setup")}
-              else
-                {:cont, assign(socket, :current_user, user)}
+              cond do
+                User.setup_required?(user) ->
+                  {:halt, redirect(socket, to: "/setup")}
+
+                user.force_password_change ->
+                  {:halt, redirect(socket, to: "/profile/password")}
+
+                true ->
+                  {:cont, assign(socket, :current_user, user)}
               end
           end
       end

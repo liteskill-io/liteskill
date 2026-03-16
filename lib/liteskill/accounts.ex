@@ -171,10 +171,17 @@ defmodule Liteskill.Accounts do
   """
   def change_password(user, current_password, new_password) do
     if User.valid_password?(user, current_password) do
-      user
-      |> User.password_changeset(%{password: new_password})
-      |> Ecto.Changeset.put_change(:force_password_change, false)
-      |> Repo.update()
+      case user
+           |> User.password_changeset(%{password: new_password})
+           |> Ecto.Changeset.put_change(:force_password_change, false)
+           |> Repo.update() do
+        {:ok, updated_user} ->
+          delete_user_sessions(user.id)
+          {:ok, updated_user}
+
+        error ->
+          error
+      end
     else
       {:error, :invalid_current_password}
     end

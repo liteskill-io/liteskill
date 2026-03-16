@@ -5,12 +5,15 @@ defmodule Liteskill.Retry do
 
   use Boundary, top_level?: true, deps: [], exports: []
 
+  @max_backoff_ms 60_000
+
   @doc """
   Calculates exponential backoff with jitter.
 
   ## Options
 
     * `:rate_limited` - when `true`, applies a 3x multiplier (for 429 errors)
+    * `:max_backoff_ms` - maximum backoff in milliseconds (default: #{@max_backoff_ms})
 
   ## Examples
 
@@ -26,8 +29,9 @@ defmodule Liteskill.Retry do
   @spec calculate_backoff(non_neg_integer(), non_neg_integer(), keyword()) :: non_neg_integer()
   def calculate_backoff(base_ms, attempt, opts \\ []) do
     base_ms = if Keyword.get(opts, :rate_limited, false), do: base_ms * 3, else: base_ms
+    max_ms = Keyword.get(opts, :max_backoff_ms, @max_backoff_ms)
     jitter = :rand.uniform()
-    trunc(base_ms * Integer.pow(2, attempt) * (1 + jitter))
+    min(trunc(base_ms * Integer.pow(2, attempt) * (1 + jitter)), max_ms)
   end
 
   @doc """

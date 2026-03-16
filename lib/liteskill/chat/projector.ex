@@ -153,15 +153,34 @@ defmodule Liteskill.Chat.Projector do
       )
     else
       log_projection_failure(stream_id, event, attempt, error)
-      # Still attempt remaining events — the failed event was non-retryable (constraint, cast, etc.)
-      do_project_ordered(stream_id, rest, 0)
+      # HALT: do not process remaining events — ordering would be violated.
+      log_and_emit_halt(stream_id, event, rest)
+      :halted
     end
   end
 
-  defp handle_projection_error(stream_id, event, rest, attempt, error) do
-    log_projection_failure(stream_id, event, attempt, error)
-    # Exhausted retries for this event — skip it and continue with rest
-    do_project_ordered(stream_id, rest, 0)
+  defp handle_projection_error(stream_id, event, rest, _attempt, error) do
+    log_projection_failure(stream_id, event, @max_projection_retries, error)
+    # Exhausted retries — halt remaining events to preserve ordering.
+    log_and_emit_halt(stream_id, event, rest)
+    :halted
+  end
+
+  defp log_and_emit_halt(stream_id, event, rest) do
+    skipped = length(rest)
+
+    if skipped > 0 do
+      Logger.error(
+        "Projector halted: #{skipped} remaining event(s) for stream=#{stream_id} " <>
+          "were not projected to preserve ordering"
+      )
+    end
+
+    :telemetry.execute(
+      [:liteskill, :projector, :batch_halted],
+      %{skipped_count: skipped},
+      %{stream_id: stream_id, failed_event_type: event.event_type}
+    )
   end
 
   defp log_projection_failure(stream_id, event, attempt, error) do

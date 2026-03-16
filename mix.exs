@@ -199,7 +199,7 @@ defmodule Liteskill.MixProject do
             macos_aarch64: [os: :darwin, cpu: :aarch64],
             macos_x86_64: [os: :darwin, cpu: :x86_64],
             linux_x86_64: linux_target_opts(),
-            windows_x86_64: [os: :windows, cpu: :x86_64]
+            windows_x86_64: windows_target_opts()
           ]
         ]
       ]
@@ -220,5 +220,16 @@ defmodule Liteskill.MixProject do
       "" -> base
       path -> base ++ [custom_erts: path, skip_nifs: true]
     end
+  end
+
+  # Windows: skip_nifs because Burrito's Zig cross-compilation uses hardcoded
+  # Unix linker flags (-Wl,-undefined=dynamic_lookup) that are invalid for MSVC
+  # targets. Additionally, Rustler-based NIFs like MDEx use rustler_precompiled
+  # which Burrito doesn't detect (only detects :elixir_make NIFs).
+  #
+  # Instead, scripts/patch-windows-nifs.sh downloads the correct precompiled
+  # binaries before `mix release desktop` runs.
+  defp windows_target_opts do
+    [os: :windows, cpu: :x86_64, skip_nifs: true]
   end
 end

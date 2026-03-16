@@ -1265,6 +1265,66 @@ defmodule Liteskill.Chat.ProjectorTest do
     end
   end
 
+  describe "batch halting on non-retryable error preserves event ordering" do
+    test "events after a failing event are NOT projected", %{user: user} do
+      {stream_id, _conversation_id} = create_conversation(user)
+
+      test_pid = self()
+      ref = make_ref()
+
+      :telemetry.attach(
+        "test-projector-batch-halted-#{inspect(ref)}",
+        [:liteskill, :projector, :batch_halted],
+        fn _event, measurements, metadata, _config ->
+          send(test_pid, {:batch_halted, measurements, metadata})
+        end,
+        nil
+      )
+
+      # First event: AssistantChunkReceived with a non-UUID message_id
+      # This raises CastError which is non-retryable
+      bad_event = %Event{
+        stream_id: stream_id,
+        stream_version: 10,
+        event_type: "AssistantChunkReceived",
+        data: %{
+          "message_id" => "not-a-valid-uuid",
+          "chunk_index" => 0,
+          "delta_text" => "will fail"
+        },
+        metadata: %{}
+      }
+
+      # Second event: a valid UserMessageAdded that should NOT be projected
+      valid_message_id = Ecto.UUID.generate()
+
+      valid_event = %Event{
+        stream_id: stream_id,
+        stream_version: 11,
+        event_type: "UserMessageAdded",
+        data: %{
+          "message_id" => valid_message_id,
+          "content" => "Should not be projected",
+          "timestamp" => DateTime.to_iso8601(DateTime.utc_now())
+        },
+        metadata: %{}
+      }
+
+      # Project both events in a single batch
+      Projector.project_events(stream_id, [bad_event, valid_event])
+
+      # The valid UserMessageAdded should NOT have been projected
+      assert Repo.get(Message, valid_message_id) == nil
+
+      # Telemetry for batch_halted should have been emitted with skipped_count: 1
+      assert_receive {:batch_halted, %{skipped_count: 1},
+                      %{stream_id: ^stream_id, failed_event_type: "AssistantChunkReceived"}},
+                     1000
+
+      :telemetry.detach("test-projector-batch-halted-#{inspect(ref)}")
+    end
+  end
+
   defp create_conversation(user) do
     conversation_id = Ecto.UUID.generate()
     stream_id = "conversation-#{conversation_id}"

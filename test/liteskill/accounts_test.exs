@@ -295,6 +295,22 @@ defmodule Liteskill.AccountsTest do
       assert "should be at least 12 character(s)" in errors_on(changeset).password
     end
 
+    test "invalidates all sessions on successful password change" do
+      {:ok, user} =
+        Accounts.register_user(%{email: unique_email(), password: "supersecretpass123"})
+
+      {:ok, session} = Accounts.create_session(user.id)
+
+      # Verify session exists
+      assert {_session_record, _user} = Accounts.validate_session_with_user(session.id)
+
+      assert {:ok, _updated} =
+               Accounts.change_password(user, "supersecretpass123", "newpassword12345")
+
+      # Session should be invalidated
+      assert Accounts.validate_session_with_user(session.id) == nil
+    end
+
     test "clears force_password_change flag on success" do
       {:ok, user} =
         Accounts.register_user(%{email: unique_email(), password: "supersecretpass123"})

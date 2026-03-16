@@ -252,7 +252,90 @@ case "$TRIPLE" in
       log "Bundled libayatana-appindicator3"
     fi
 
-    # Step 3: Strip Wayland libs BEFORE packing. linuxdeploy bundles
+    # Step 3: Bundle WebKitGTK runtime dependencies NOT caught by ldd.
+    #
+    # linuxdeploy's ldd analysis bundles libwebkit2gtk-4.1.so and its
+    # transitive .so dependencies, but WebKitGTK also requires:
+    #   - Subprocess executables (WebKitWebProcess, WebKitNetworkProcess)
+    #   - GSettings schemas (compiled .xml for GTK, WebKit, GLib)
+    #   - GDK pixbuf loaders (image format decoders)
+    #   - GIO modules (dconf, etc.)
+    # Without these the AppImage fails on distros that don't ship the
+    # exact same WebKitGTK version (e.g. Fedora, Arch, openSUSE).
+    log "Bundling WebKitGTK runtime dependencies..."
+
+    # 3a: WebKit subprocess executables — spawned at runtime by the library.
+    WEBKIT_EXEC_DIR=$(find /usr/lib* -type d -name 'webkit2gtk-4.1' 2>/dev/null | head -1)
+    if [ -z "$WEBKIT_EXEC_DIR" ]; then
+      # Fedora/Arch path variant
+      WEBKIT_EXEC_DIR=$(find /usr/libexec -type d -name 'webkit2gtk-4.1' 2>/dev/null | head -1)
+    fi
+    if [ -n "$WEBKIT_EXEC_DIR" ]; then
+      mkdir -p "$APPDIR/usr/lib/webkit2gtk-4.1"
+      for proc in WebKitWebProcess WebKitNetworkProcess; do
+        PROC_BIN=$(find "$WEBKIT_EXEC_DIR" -name "$proc" -print -quit 2>/dev/null || true)
+        if [ -n "$PROC_BIN" ]; then
+          cp -L "$PROC_BIN" "$APPDIR/usr/lib/webkit2gtk-4.1/"
+          chmod +x "$APPDIR/usr/lib/webkit2gtk-4.1/$proc"
+          # Bundle any .so deps the subprocess needs that aren't already in AppDir
+          ldd "$PROC_BIN" 2>/dev/null | grep '=> /' | awk '{print $3}' | while read -r dep; do
+            dep_name=$(basename "$dep")
+            if [ ! -f "$APPDIR/usr/lib/$dep_name" ]; then
+              cp -L "$dep" "$APPDIR/usr/lib/" 2>/dev/null || true
+            fi
+          done
+          log "Bundled $proc"
+        fi
+      done
+      # Also bundle injected-bundle .so if present (used by web extensions)
+      find "$WEBKIT_EXEC_DIR" -name '*.so' -exec cp -L {} "$APPDIR/usr/lib/webkit2gtk-4.1/" \; 2>/dev/null || true
+    else
+      log "WARNING: WebKit exec dir not found — WebKitWebProcess won't be bundled"
+    fi
+
+    # 3b: GSettings schemas — GTK, WebKit, GLib all need compiled schemas.
+    SCHEMAS_DIR="$APPDIR/usr/share/glib-2.0/schemas"
+    mkdir -p "$SCHEMAS_DIR"
+    for schema_dir in /usr/share/glib-2.0/schemas; do
+      if [ -d "$schema_dir" ]; then
+        cp -n "$schema_dir"/*.xml "$SCHEMAS_DIR/" 2>/dev/null || true
+        cp -n "$schema_dir"/*.override "$SCHEMAS_DIR/" 2>/dev/null || true
+      fi
+    done
+    # Compile schemas in the AppDir (requires glib-compile-schemas on build host)
+    if command -v glib-compile-schemas &>/dev/null; then
+      glib-compile-schemas "$SCHEMAS_DIR" 2>/dev/null || true
+      log "Compiled GSettings schemas"
+    fi
+
+    # 3c: GDK pixbuf loaders — needed for image rendering in WebKitGTK.
+    GDK_PIXBUF_QUERY=$(command -v gdk-pixbuf-query-loaders 2>/dev/null || true)
+    if [ -n "$GDK_PIXBUF_QUERY" ]; then
+      GDK_PIXBUF_MODULEDIR=$("$GDK_PIXBUF_QUERY" 2>/dev/null | grep -oP '"/[^"]+/loaders"' | tr -d '"' | head -1 || true)
+      if [ -n "$GDK_PIXBUF_MODULEDIR" ] && [ -d "$GDK_PIXBUF_MODULEDIR" ]; then
+        APPDIR_LOADERS="$APPDIR/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders"
+        mkdir -p "$APPDIR_LOADERS"
+        cp -L "$GDK_PIXBUF_MODULEDIR"/*.so "$APPDIR_LOADERS/" 2>/dev/null || true
+        # Generate loaders.cache pointing to the bundled loaders
+        GDK_PIXBUF_MODULE_FILE="$APPDIR/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+        "$GDK_PIXBUF_QUERY" "$APPDIR_LOADERS"/*.so 2>/dev/null > "$GDK_PIXBUF_MODULE_FILE" || true
+        log "Bundled GDK pixbuf loaders"
+      fi
+    fi
+
+    # 3d: GIO modules (dconf backend, etc.)
+    GIO_MODULE_DIR=$(pkg-config --variable=giomoduledir gio-2.0 2>/dev/null || echo "/usr/lib/x86_64-linux-gnu/gio/modules")
+    if [ -d "$GIO_MODULE_DIR" ]; then
+      mkdir -p "$APPDIR/usr/lib/gio/modules"
+      cp -L "$GIO_MODULE_DIR"/*.so "$APPDIR/usr/lib/gio/modules/" 2>/dev/null || true
+      # Compile GIO module cache
+      if command -v gio-querymodules &>/dev/null; then
+        gio-querymodules "$APPDIR/usr/lib/gio/modules" 2>/dev/null || true
+      fi
+      log "Bundled GIO modules"
+    fi
+
+    # Step 4: Strip Wayland libs BEFORE packing. linuxdeploy bundles
     # libwayland-*.so from the build host. These conflict with the host
     # system's Wayland/EGL stack at runtime, causing WebKitGTK to crash
     # with "Could not create default EGL display: EGL_BAD_PARAMETER".
@@ -262,7 +345,43 @@ case "$TRIPLE" in
       log "Stripped $WAYLAND_COUNT Wayland libs from AppDir"
     fi
 
-    # Step 4: Pack AppDir into AppImage using linuxdeploy's built-in
+    # Step 5: Install custom AppRun that sets WebKitGTK environment vars.
+    # linuxdeploy's default AppRun sets LD_LIBRARY_PATH but not the GTK/
+    # WebKit-specific paths needed for bundled schemas, loaders, and
+    # subprocess executables.
+    cat > "$APPDIR/AppRun" << 'APPRUN_EOF'
+#!/bin/bash
+HERE="$(dirname "$(readlink -f "$0")")"
+
+export LD_LIBRARY_PATH="$HERE/usr/lib:${LD_LIBRARY_PATH}"
+
+# WebKitGTK subprocess executables (WebKitWebProcess, WebKitNetworkProcess)
+export WEBKIT2_EXEC_PATH="$HERE/usr/lib/webkit2gtk-4.1"
+
+# GSettings schemas (GTK, WebKit, GLib)
+export GSETTINGS_SCHEMA_DIR="$HERE/usr/share/glib-2.0/schemas:${GSETTINGS_SCHEMA_DIR}"
+export XDG_DATA_DIRS="$HERE/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+
+# GDK pixbuf loaders
+if [ -f "$HERE/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache" ]; then
+  export GDK_PIXBUF_MODULE_FILE="$HERE/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+  export GDK_PIXBUF_MODULEDIR="$HERE/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders"
+fi
+
+# GIO modules
+if [ -d "$HERE/usr/lib/gio/modules" ]; then
+  export GIO_MODULE_DIR="$HERE/usr/lib/gio/modules"
+fi
+
+# Disable DMA-BUF renderer (fallback; also set in Rust main.rs)
+export WEBKIT_DISABLE_DMABUF_RENDERER="${WEBKIT_DISABLE_DMABUF_RENDERER:-1}"
+
+exec "$HERE/usr/bin/liteskill" "$@"
+APPRUN_EOF
+    chmod +x "$APPDIR/AppRun"
+    log "Installed custom AppRun with WebKitGTK env vars"
+
+    # Step 6: Pack AppDir into AppImage using linuxdeploy's built-in
     # appimagetool (via --output appimage on the populated AppDir).
     APP_VERSION="$(cat VERSION | tr -d '[:space:]')"
     FINAL_NAME="Liteskill_${APP_VERSION}_amd64.AppImage"

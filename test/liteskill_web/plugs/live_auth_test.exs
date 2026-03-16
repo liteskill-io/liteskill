@@ -116,6 +116,27 @@ defmodule LiteskillWeb.Plugs.LiveAuthTest do
       end
     end
 
+    test "redirects to /profile/password when force_password_change is true" do
+      {:ok, user} =
+        Accounts.register_user(%{
+          email: "force-pw-#{System.unique_integer([:positive])}@example.com",
+          password: "supersecretpass123"
+        })
+
+      {:ok, forced} = Accounts.set_temporary_password(user, "temporarypass123")
+      assert forced.force_password_change == true
+
+      {:ok, session} = Accounts.create_session(forced.id)
+
+      socket = build_socket()
+      session_data = %{"session_token" => session.id}
+
+      assert {:halt, redirected} =
+               LiveAuth.on_mount(:require_authenticated, %{}, session_data, socket)
+
+      assert_redirected_to(redirected, "/profile/password")
+    end
+
     test "touches session when last_active_at is stale", %{user: user} do
       {:ok, session} = Accounts.create_session(user.id)
 

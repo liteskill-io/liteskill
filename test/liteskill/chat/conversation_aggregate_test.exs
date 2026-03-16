@@ -594,6 +594,31 @@ defmodule Liteskill.Chat.ConversationAggregateTest do
       assert log =~ "AssistantChunkReceived received with no active stream"
     end
 
+    test "ConversationTruncated with missing message_id preserves all messages" do
+      state = %ConversationAggregate{
+        status: :active,
+        messages: [
+          %{id: "msg-2", role: "assistant", content: "Hi"},
+          %{id: "msg-1", role: "user", content: "Hello"}
+        ]
+      }
+
+      event = %{
+        event_type: "ConversationTruncated",
+        data: %{"message_id" => "nonexistent-id"}
+      }
+
+      log =
+        capture_log(fn ->
+          new_state = ConversationAggregate.apply_event(state, event)
+          assert length(new_state.messages) == 2
+          assert new_state.status == :active
+          assert new_state.current_stream == nil
+        end)
+
+      assert log =~ "ConversationTruncated: message nonexistent-id not found in aggregate state"
+    end
+
     test "ToolCallStarted with nil current_stream logs warning and preserves state" do
       state = %ConversationAggregate{status: :active, current_stream: nil, messages: []}
 

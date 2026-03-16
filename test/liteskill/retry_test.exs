@@ -28,6 +28,16 @@ defmodule Liteskill.RetryTest do
     test "returns 0 range for base_ms of 0" do
       assert Retry.calculate_backoff(0, 5) == 0
     end
+
+    test "caps backoff at max_backoff_ms" do
+      backoff = Retry.calculate_backoff(1000, 20)
+      assert backoff <= 60_000
+    end
+
+    test "respects custom max_backoff_ms option" do
+      backoff = Retry.calculate_backoff(1000, 20, max_backoff_ms: 5_000)
+      assert backoff <= 5_000
+    end
   end
 
   describe "interruptible_sleep/1" do

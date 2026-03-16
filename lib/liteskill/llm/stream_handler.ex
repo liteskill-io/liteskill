@@ -305,6 +305,9 @@ defmodule Liteskill.LLM.StreamHandler do
           # Clean up orphaned chunks from the failed attempt
           Liteskill.Chat.delete_message_chunks(message_id)
 
+          # Release gateway slot before retry — next attempt may re-checkout
+          gateway_checkin(opts, {:error, :retryable})
+
           do_stream_with_retry(stream_id, message_id, model_id, messages, opts, retry_count + 1)
         else
           error_message = extract_error_message(reason)
@@ -783,7 +786,7 @@ defmodule Liteskill.LLM.StreamHandler do
           handle_stream(stream_id, next_messages, next_opts)
 
         {:error, :cost_limit_exceeded, _current} ->
-          gateway_checkin(opts, :ok)
+          gateway_checkin(opts, {:error, :cost_limit_exceeded})
 
           Logger.warning("StreamHandler: cost limit exceeded for #{stream_id}, stopping tool-call loop")
 
@@ -853,16 +856,23 @@ defmodule Liteskill.LLM.StreamHandler do
   end
 
   defp await_tool_decisions(pending_ids, decisions, timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_await_tool_decisions(pending_ids, decisions, deadline)
+  end
+
+  defp do_await_tool_decisions(pending_ids, decisions, deadline) do
     if MapSet.size(pending_ids) == 0 do
       decisions
     else
+      remaining_ms = max(0, deadline - System.monotonic_time(:millisecond))
+
       receive do
         {:tool_decision, tool_use_id, decision} when decision in [:approved, :rejected] ->
           new_decisions = Map.put(decisions, tool_use_id, decision)
           new_pending = MapSet.delete(pending_ids, tool_use_id)
-          await_tool_decisions(new_pending, new_decisions, timeout_ms)
+          do_await_tool_decisions(new_pending, new_decisions, deadline)
       after
-        timeout_ms ->
+        remaining_ms ->
           Enum.reduce(pending_ids, decisions, fn id, acc ->
             Map.put(acc, id, :rejected)
           end)
