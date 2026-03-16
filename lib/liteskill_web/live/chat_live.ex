@@ -17,10 +17,14 @@ defmodule LiteskillWeb.ChatLive do
   alias LiteskillWeb.ChatLive.CostHandler
   alias LiteskillWeb.ChatLive.EditHandler
   alias LiteskillWeb.ChatLive.Helpers, as: ChatHelpers
+  alias LiteskillWeb.ChatLive.MemoryHandler
   alias LiteskillWeb.ChatLive.NotationHandler
+  alias LiteskillWeb.ChatLive.SearchHandler
   alias LiteskillWeb.ChatLive.SourcesHandler
   alias LiteskillWeb.ChatLive.ToolHandler
+  alias LiteskillWeb.ChatLive.TreeHandler
   alias LiteskillWeb.McpComponents
+  alias LiteskillWeb.MemoriesComponents
   alias LiteskillWeb.SharingComponents
   alias LiteskillWeb.SharingLive
   alias LiteskillWeb.SourcesComponents
@@ -130,6 +134,9 @@ defmodule LiteskillWeb.ChatLive do
        json_notation: nil
      )
      |> assign(AcpHandler.assigns())
+     |> assign(TreeHandler.assigns())
+     |> assign(SearchHandler.assigns())
+     |> assign(MemoryHandler.assigns())
      |> assign(
        acp_mode: acp_mode,
        acp_agent_configs: acp_configs,
@@ -523,6 +530,29 @@ defmodule LiteskillWeb.ChatLive do
                       <.icon name="hero-share-micro" class="size-4" />
                     </button>
                     <button
+                      phx-click="toggle_search"
+                      class={["btn btn-ghost btn-sm btn-square", @show_search && "btn-active"]}
+                      title="Search messages"
+                    >
+                      <.icon name="hero-magnifying-glass-micro" class="size-4" />
+                    </button>
+                    <button
+                      :if={@conversation.parent_conversation_id != nil}
+                      phx-click="toggle_tree_panel"
+                      class={["btn btn-ghost btn-sm btn-square", @show_tree_panel && "btn-active"]}
+                      title="Conversation tree"
+                    >
+                      <.icon name="hero-share-micro" class="size-4 rotate-90" />
+                    </button>
+                    <button
+                      :if={!@streaming}
+                      phx-click="open_save_memory"
+                      class="btn btn-ghost btn-sm btn-square"
+                      title="Save memory"
+                    >
+                      <.icon name="hero-light-bulb-micro" class="size-4" />
+                    </button>
+                    <button
                       phx-click="toggle_json_view"
                       class={["btn btn-ghost btn-sm btn-square", @show_json_viewer && "btn-active"]}
                       title="JSON notation"
@@ -595,6 +625,19 @@ defmodule LiteskillWeb.ChatLive do
                       :if={@editing_message_id != msg.id && msg.role == "assistant"}
                       message={msg}
                     />
+                    <div
+                      :if={!@streaming && @editing_message_id == nil && msg.position}
+                      class="flex justify-end -mt-2 mb-2 opacity-0 hover:opacity-100 transition-opacity"
+                    >
+                      <button
+                        phx-click="fork_at_message"
+                        phx-value-position={msg.position}
+                        class="btn btn-ghost btn-xs text-base-content/30 hover:text-primary gap-1"
+                        title="Fork conversation here"
+                      >
+                        <.icon name="hero-arrow-path-rounded-square-micro" class="size-3" /> Fork
+                      </button>
+                    </div>
                     <ChatComponents.stream_error
                       :if={msg.status == "failed" && msg == List.last(@messages) && !@stream_error}
                       error={
@@ -710,6 +753,13 @@ defmodule LiteskillWeb.ChatLive do
                 show={@show_sources_sidebar}
                 sources={@sidebar_sources}
               />
+              <MemoriesComponents.tree_panel
+                :if={@show_tree_panel}
+                nodes={@tree_nodes}
+                current_conversation_id={@conversation.id}
+                diff={@tree_diff}
+                diff_conversation_id={@tree_diff_conversation_id}
+              />
             </div>
           <% else %>
             <%!-- New conversation prompt --%>
@@ -810,6 +860,22 @@ defmodule LiteskillWeb.ChatLive do
       <McpComponents.tool_call_modal tool_call={@tool_call_modal} />
 
       <AcpHandler.permission_modal :if={@acp_permission_request} request={@acp_permission_request} />
+
+      <MemoriesComponents.search_results_panel
+        :if={@show_search}
+        results={@search_results}
+        query={@search_query}
+      />
+
+      <MemoriesComponents.memory_form_modal
+        :if={@show_memory_form}
+        form={@memory_form}
+      />
+
+      <MemoriesComponents.memory_suggestions_modal
+        :if={@show_memory_suggestions}
+        suggestions={@memory_suggestions}
+      />
 
       <SharingComponents.sharing_modal
         show={@show_sharing}
@@ -1071,6 +1137,33 @@ defmodule LiteskillWeb.ChatLive do
   @impl true
   def handle_event(event, params, socket) when event in @acp_events do
     AcpHandler.handle_event(event, params, socket)
+  end
+
+  # --- Tree Events ---
+
+  @tree_events TreeHandler.events()
+
+  @impl true
+  def handle_event(event, params, socket) when event in @tree_events do
+    TreeHandler.handle_event(event, params, socket)
+  end
+
+  # --- Search Events ---
+
+  @search_events SearchHandler.events()
+
+  @impl true
+  def handle_event(event, params, socket) when event in @search_events do
+    SearchHandler.handle_event(event, params, socket)
+  end
+
+  # --- Memory Events ---
+
+  @memory_events MemoryHandler.events()
+
+  @impl true
+  def handle_event(event, params, socket) when event in @memory_events do
+    MemoryHandler.handle_event(event, params, socket)
   end
 
   @impl true

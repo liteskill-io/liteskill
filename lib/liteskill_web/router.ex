@@ -136,6 +136,7 @@ defmodule LiteskillWeb.Router do
       live "/sources/pipeline", PipelineLive, :pipeline
       live "/sources/:source_id", SourcesLive, :source_show
       live "/sources/:source_id/:document_id", SourcesLive, :source_document_show
+      live "/memories", MemoriesLive, :memories
       live "/mcp", McpLive, :mcp_servers
       live "/reports", ReportsLive, :reports
       live "/reports/:report_id", ReportsLive, :report_show

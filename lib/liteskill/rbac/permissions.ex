@@ -26,6 +26,7 @@ defmodule Liteskill.Rbac.Permissions do
     "wiki_spaces:manage_all",
     "schedules:create",
     "schedules:manage_all",
+    "memories:create",
     "acp:create",
     "acp:manage",
     "llm_providers:manage",
@@ -49,6 +50,7 @@ defmodule Liteskill.Rbac.Permissions do
     "wiki_spaces:create",
     "schedules:create",
     "mcp_servers:create",
+    "memories:create",
     "acp:create"
   ]
 

@@ -35,6 +35,7 @@ defmodule LiteskillWeb do
       Liteskill.LlmModels,
       Liteskill.LlmProviders,
       Liteskill.McpServers,
+      Liteskill.Memories,
       Liteskill.OpenRouter,
       Liteskill.Rag,
       Liteskill.Rbac,

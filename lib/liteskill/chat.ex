@@ -24,6 +24,7 @@ defmodule Liteskill.Chat do
       MessageBuilder,
       MessageChunk,
       Projector,
+      Search,
       StreamRecovery,
       ToolCall
     ]
@@ -453,6 +454,42 @@ defmodule Liteskill.Chat do
       _ ->
         :ok
     end
+  end
+
+  # --- Search API ---
+
+  defdelegate search_messages(user_id, query, opts \\ []), to: Liteskill.Chat.Search, as: :search
+
+  # --- Branch Diff API ---
+
+  @doc """
+  Returns the shared prefix and divergent messages between two branch conversations.
+
+  Returns `{:ok, %{shared: [...], branch_a: [...], branch_b: [...]}}`.
+  """
+  def diff_branches(conversation_id_a, conversation_id_b, user_id) do
+    with {:ok, conv_a} <- get_conversation(conversation_id_a, user_id),
+         {:ok, conv_b} <- get_conversation(conversation_id_b, user_id) do
+      msgs_a = conv_a.messages
+      msgs_b = conv_b.messages
+
+      # Find divergence point: messages match while content + role are identical
+      {shared, rest_a, rest_b} = split_at_divergence(msgs_a, msgs_b)
+
+      {:ok, %{shared: shared, branch_a: rest_a, branch_b: rest_b}}
+    end
+  end
+
+  defp split_at_divergence(msgs_a, msgs_b) do
+    split_at_divergence(msgs_a, msgs_b, [])
+  end
+
+  defp split_at_divergence([a | rest_a], [b | rest_b], shared) when a.role == b.role and a.content == b.content do
+    split_at_divergence(rest_a, rest_b, [a | shared])
+  end
+
+  defp split_at_divergence(rest_a, rest_b, shared) do
+    {Enum.reverse(shared), rest_a, rest_b}
   end
 
   # --- Internal Helpers ---

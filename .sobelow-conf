@@ -24,6 +24,11 @@
     # binary_to_term in cosine_search deserializes float embeddings stored in the
     # SQLite DB with the [:safe] option, which prevents atom creation and code loading.
     # The data is internal (written by our own embedding pipeline), not user-supplied.
-    "Misc.BinToTerm"
+    "Misc.BinToTerm",
+
+    # Chat.Search.fts_search builds a parameterized query with ? placeholders.
+    # The only interpolated content is the count of accessible_ids (integer-derived
+    # placeholder string like "?, ?, ?"), not user input. All values are bound via params.
+    "SQL.Query"
   ]
 ]

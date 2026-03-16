@@ -234,6 +234,18 @@ defmodule LiteskillWeb.Layouts do
         >
           <.icon name="hero-document-text-micro" class="size-4" /> Reports
         </.link>
+        <.link
+          navigate={~p"/memories"}
+          class={[
+            "flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm transition-colors",
+            if(@live_action == :memories,
+              do: "bg-primary/10 text-primary font-medium",
+              else: "hover:bg-base-200 text-base-content/70"
+            )
+          ]}
+        >
+          <.icon name="hero-light-bulb-micro" class="size-4" /> Memories
+        </.link>
       </div>
       <div class="p-2 border-t border-base-300 min-w-64">
         <.link
