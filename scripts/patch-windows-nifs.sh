@@ -44,7 +44,7 @@ log "MDEx version: $MDEX_VERSION"
 
 NIF_VERSION="2.15"
 WINDOWS_TARGET="x86_64-pc-windows-msvc"
-WINDOWS_NIF_NAME="libcomrak_nif-v${MDEX_VERSION}-nif-${NIF_VERSION}-${WINDOWS_TARGET}.dll"
+WINDOWS_NIF_NAME="comrak_nif-v${MDEX_VERSION}-nif-${NIF_VERSION}-${WINDOWS_TARGET}.dll"
 DOWNLOAD_URL="https://github.com/leandrocp/mdex/releases/download/v${MDEX_VERSION}/${WINDOWS_NIF_NAME}.tar.gz"
 
 log "Downloading Windows MDEx NIF..."
@@ -52,7 +52,7 @@ curl -fsSL "$DOWNLOAD_URL" -o "$TMPDIR/mdex-windows.tar.gz"
 tar xzf "$TMPDIR/mdex-windows.tar.gz" -C "$TMPDIR"
 
 # Find the extracted DLL (may be at root or in a subdirectory)
-WINDOWS_DLL=$(find "$TMPDIR" -name "libcomrak_nif*.dll" -print -quit)
+WINDOWS_DLL=$(find "$TMPDIR" -name "comrak_nif*.dll" -print -quit)
 if [ -z "$WINDOWS_DLL" ]; then
   echo "ERROR: Windows DLL not found in downloaded archive" >&2
   ls -laR "$TMPDIR"

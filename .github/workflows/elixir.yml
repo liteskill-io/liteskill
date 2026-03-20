@@ -184,6 +184,12 @@ jobs:
       - name: Compile
         run: mix compile
 
+      - name: Build assets
+        run: |
+          npm install --prefix assets
+          mix assets.setup
+          mix assets.build
+
       - name: Run E2E tests
         run: mix test.e2e
 
