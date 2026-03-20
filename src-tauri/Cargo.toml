@@ -4,23 +4,27 @@ version = "0.1.0"
 default-run = "liteskill"
 edition = "2021"
 build = "src/build.rs"
-description = ""
+description = "Liteskill desktop application"
+authors = ["Liteskill"]
+license = "MIT"
+rust-version = "1.77"
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.5", features = [] }
 
 [dependencies]
 log = "0.4"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "2", features = ["tray-icon"] }
-tauri-plugin-shell = "2"
-tauri-plugin-log = "2"
-tauri-plugin-notification = "2"
+tauri = { version = "2.10", features = ["tray-icon"] }
+tauri-plugin-shell = "2.3"
+tauri-plugin-log = "2.8"
+tauri-plugin-notification = "2.3"
 rfd = "0.15"
 
 [features]
-# this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.
-# If you use cargo directly instead of tauri's cli you can use this feature flag to switch between tauri's `dev` and `build` modes.
+# This feature is used for production builds or when the built-in dev server is
+# disabled. If you use cargo directly instead of tauri's CLI you can use this
+# feature flag to switch between tauri's `dev` and `build` modes.
 # DO NOT REMOVE!!
-custom-protocol = [ "tauri/custom-protocol" ]
+custom-protocol = ["tauri/custom-protocol"]

@@ -40,7 +40,9 @@ if [ ! -d "$RELEASE_DIR" ]; then
 fi
 
 log "Checking NIFs in release: $RELEASE_DIR"
-check_nif "mdex" "*.dll"
+check_nif "mdex" "libcomrak_nif*.dll"
+check_nif "lumis" "lumis_nif*.dll"
+check_nif "exqlite" "sqlite3_nif.dll"
 check_nif "argon2_elixir" "argon2_nif.dll"
 
 if [ "$ERRORS" -gt 0 ]; then
@@ -48,4 +50,4 @@ if [ "$ERRORS" -gt 0 ]; then
   exit 1
 fi
 
-log "All Windows NIFs verified"
+log "All Windows NIFs verified (mdex, lumis, exqlite, argon2)"

@@ -3,15 +3,17 @@
 # Patches NIF binaries in _build for a Windows Burrito release.
 #
 # Burrito's NIF detection (`nif_sniff`) only finds `:elixir_make` NIFs, missing
-# Rustler-based NIFs like MDEx. Additionally, Burrito's Zig cross-compilation
-# uses hardcoded Unix linker flags (-Wl,-undefined=dynamic_lookup) that break
-# on Windows targets. So we set `skip_nifs: true` for Windows in mix.exs and
-# provide the correct Windows NIF binaries manually.
+# Rustler-based NIFs like MDEx and Lumis. Additionally, Burrito's Zig cross-
+# compilation uses hardcoded Unix linker flags (-Wl,-undefined=dynamic_lookup)
+# that break on Windows targets. So we set `skip_nifs: true` for Windows in
+# mix.exs and provide the correct Windows NIF binaries manually.
 #
 # This script:
 #   1. Downloads the Windows precompiled MDEx NIF from GitHub releases
-#   2. Cross-compiles argon2 NIF for Windows using Zig
-#   3. Places both in _build so Burrito packages them
+#   2. Downloads the Windows precompiled Lumis NIF from GitHub releases
+#   3. Downloads the Windows precompiled exqlite (SQLite3) NIF from GitHub releases
+#   4. Cross-compiles argon2 NIF for Windows using Zig
+#   5. Places all in _build so Burrito packages them
 #
 # Usage:
 #   bash scripts/patch-windows-nifs.sh
@@ -50,7 +52,7 @@ curl -fsSL "$DOWNLOAD_URL" -o "$TMPDIR/mdex-windows.tar.gz"
 tar xzf "$TMPDIR/mdex-windows.tar.gz" -C "$TMPDIR"
 
 # Find the extracted DLL (may be at root or in a subdirectory)
-WINDOWS_DLL=$(find "$TMPDIR" -name "*.dll" -print -quit)
+WINDOWS_DLL=$(find "$TMPDIR" -name "libcomrak_nif*.dll" -print -quit)
 if [ -z "$WINDOWS_DLL" ]; then
   echo "ERROR: Windows DLL not found in downloaded archive" >&2
   ls -laR "$TMPDIR"
@@ -67,6 +69,87 @@ fi
 rm -f "$MDEX_PRIV"/*.so
 cp "$WINDOWS_DLL" "$MDEX_PRIV/$WINDOWS_NIF_NAME"
 log "Patched MDEx NIF: -> $WINDOWS_NIF_NAME"
+
+# ============================================================================
+# Lumis (Rustler precompiled NIF — syntax highlighting via Tree-sitter)
+# ============================================================================
+# Lumis is a dependency of MDEx. Like MDEx, it uses rustler_precompiled and
+# only downloads a host-platform binary at compile time. We replace the
+# Linux .so with the Windows .dll.
+
+LUMIS_VERSION=$(grep '@version' "$PROJECT_ROOT/deps/lumis/mix.exs" | head -1 | grep -oP '"[^"]+"' | tr -d '"')
+if [ -z "$LUMIS_VERSION" ]; then
+  echo "ERROR: Could not determine Lumis version" >&2
+  exit 1
+fi
+log "Lumis version: $LUMIS_VERSION"
+
+LUMIS_NIF_NAME="lumis_nif-v${LUMIS_VERSION}-nif-${NIF_VERSION}-${WINDOWS_TARGET}.dll"
+LUMIS_DOWNLOAD_URL="https://github.com/leandrocp/lumis/releases/download/elixir@v${LUMIS_VERSION}/${LUMIS_NIF_NAME}.tar.gz"
+
+log "Downloading Windows Lumis NIF..."
+curl -fsSL "$LUMIS_DOWNLOAD_URL" -o "$TMPDIR/lumis-windows.tar.gz"
+mkdir -p "$TMPDIR/lumis"
+tar xzf "$TMPDIR/lumis-windows.tar.gz" -C "$TMPDIR/lumis"
+
+LUMIS_DLL=$(find "$TMPDIR/lumis" -name "lumis_nif*.dll" -print -quit)
+if [ -z "$LUMIS_DLL" ]; then
+  echo "ERROR: Lumis Windows DLL not found in downloaded archive" >&2
+  ls -laR "$TMPDIR/lumis"
+  exit 1
+fi
+
+LUMIS_PRIV="$PROJECT_ROOT/_build/prod/lib/lumis/priv/native"
+if [ ! -d "$LUMIS_PRIV" ]; then
+  echo "ERROR: Lumis priv directory not found at $LUMIS_PRIV" >&2
+  echo "Run 'MIX_ENV=prod mix compile' first" >&2
+  exit 1
+fi
+
+rm -f "$LUMIS_PRIV"/*.so
+cp "$LUMIS_DLL" "$LUMIS_PRIV/$LUMIS_NIF_NAME"
+log "Patched Lumis NIF: -> $LUMIS_NIF_NAME"
+
+# ============================================================================
+# exqlite (C NIF via elixir_make + cc_precompiler — SQLite3 binding)
+# ============================================================================
+# exqlite publishes precompiled NIF binaries on GitHub. We download the
+# Windows MSVC variant and replace the Linux .so.
+
+EXQLITE_VERSION=$(grep '@version' "$PROJECT_ROOT/deps/exqlite/mix.exs" | head -1 | grep -oP '"[^"]+"' | tr -d '"')
+if [ -z "$EXQLITE_VERSION" ]; then
+  echo "ERROR: Could not determine exqlite version" >&2
+  exit 1
+fi
+log "exqlite version: $EXQLITE_VERSION"
+
+# Determine NIF version for exqlite (uses 2.16 or 2.17 depending on OTP)
+EXQLITE_NIF_VERSION="2.17"
+EXQLITE_NIF_NAME="exqlite-nif-${EXQLITE_NIF_VERSION}-x86_64-windows-msvc-${EXQLITE_VERSION}.tar.gz"
+EXQLITE_DOWNLOAD_URL="https://github.com/elixir-sqlite/exqlite/releases/download/v${EXQLITE_VERSION}/${EXQLITE_NIF_NAME}"
+
+log "Downloading Windows exqlite NIF (NIF version ${EXQLITE_NIF_VERSION})..."
+curl -fsSL "$EXQLITE_DOWNLOAD_URL" -o "$TMPDIR/exqlite-windows.tar.gz"
+mkdir -p "$TMPDIR/exqlite"
+tar xzf "$TMPDIR/exqlite-windows.tar.gz" -C "$TMPDIR/exqlite"
+
+EXQLITE_DLL=$(find "$TMPDIR/exqlite" -name "sqlite3_nif.dll" -print -quit)
+if [ -z "$EXQLITE_DLL" ]; then
+  echo "ERROR: exqlite Windows DLL not found in downloaded archive" >&2
+  ls -laR "$TMPDIR/exqlite"
+  exit 1
+fi
+
+EXQLITE_PRIV="$PROJECT_ROOT/_build/prod/lib/exqlite/priv"
+if [ ! -d "$EXQLITE_PRIV" ]; then
+  echo "ERROR: exqlite priv directory not found at $EXQLITE_PRIV" >&2
+  echo "Run 'MIX_ENV=prod mix compile' first" >&2
+  exit 1
+fi
+
+rm -f "$EXQLITE_PRIV/sqlite3_nif.so"
+cp "$EXQLITE_DLL" "$EXQLITE_PRIV/sqlite3_nif.dll"
+log "Patched exqlite NIF: -> sqlite3_nif.dll"
 
 # ============================================================================
 # argon2_elixir (C NIF via elixir_make)
@@ -140,4 +223,4 @@ rm -f "$ARGON2_PRIV/argon2_nif.so"
 cp "$ARGON2_BUILD/argon2_nif.dll" "$ARGON2_PRIV/argon2_nif.dll"
 log "Patched argon2 NIF: -> argon2_nif.dll"
 
-log "All Windows NIFs patched successfully"
+log "All Windows NIFs patched successfully (mdex, lumis, exqlite, argon2)"

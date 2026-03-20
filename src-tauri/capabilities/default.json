@@ -7,12 +7,14 @@
     "urls": ["http://localhost:*"]
   },
   "permissions": [
+    "core:default",
     {
       "identifier": "shell:allow-execute",
       "allow": [
         {
           "name": "desktop",
-          "sidecar": true
+          "sidecar": true,
+          "args": true
         }
       ]
     },
@@ -21,7 +23,8 @@
       "allow": [
         {
           "name": "desktop",
-          "sidecar": true
+          "sidecar": true,
+          "args": true
         }
       ]
     },

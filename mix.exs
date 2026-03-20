@@ -208,7 +208,7 @@ defmodule Liteskill.MixProject do
 
   # When BURRITO_CUSTOM_ERTS is set, use a glibc ERTS tarball instead of Burrito's
   # default musl-linked precompiled ERTS. This avoids musl/glibc symbol conflicts
-  # with NIFs (MDEx, argon2) that are compiled against glibc.
+  # with NIFs (MDEx, Lumis, exqlite, argon2) that are compiled against glibc.
   # skip_nifs: true prevents Burrito from recompiling NIFs with Zig (Linux is always
   # treated as a cross-build internally), since the NIFs from `mix compile` are
   # already glibc-linked and compatible with the custom ERTS.
@@ -224,11 +224,12 @@ defmodule Liteskill.MixProject do
 
   # Windows: skip_nifs because Burrito's Zig cross-compilation uses hardcoded
   # Unix linker flags (-Wl,-undefined=dynamic_lookup) that are invalid for MSVC
-  # targets. Additionally, Rustler-based NIFs like MDEx use rustler_precompiled
-  # which Burrito doesn't detect (only detects :elixir_make NIFs).
+  # targets. Additionally, Rustler-based NIFs (MDEx, Lumis) use
+  # rustler_precompiled which Burrito doesn't detect (only detects :elixir_make).
   #
-  # Instead, scripts/patch-windows-nifs.sh downloads the correct precompiled
-  # binaries before `mix release desktop` runs.
+  # Instead, scripts/patch-windows-nifs.sh downloads precompiled Windows
+  # binaries for all 4 NIFs (mdex, lumis, exqlite, argon2) before
+  # `mix release desktop` runs.
   defp windows_target_opts do
     [os: :windows, cpu: :x86_64, skip_nifs: true]
   end
