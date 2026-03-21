@@ -50,7 +50,7 @@ defmodule Liteskill.Runs do
           |> Repo.update()
           |> case do
             {:ok, updated} ->
-              updated = Repo.preload(updated, [:team_definition, :run_tasks, :run_logs])
+              updated = Repo.preload(updated, [:team_definition, :run_tasks, :run_logs], in_parallel: false)
               broadcast_run_update(updated)
               {:ok, updated}
 
@@ -119,7 +119,7 @@ defmodule Liteskill.Runs do
   def get_run(id, user_id) do
     case Run
          |> Repo.get(id)
-         |> Repo.preload([:team_definition, :run_tasks, :run_logs]) do
+         |> Repo.preload([:team_definition, :run_tasks, :run_logs], in_parallel: false) do
       nil ->
         {:error, :not_found}
 
@@ -136,7 +136,7 @@ defmodule Liteskill.Runs do
   end
 
   def get_run!(id) do
-    Run |> Repo.get!(id) |> Repo.preload([:team_definition, :run_tasks, :run_logs])
+    Run |> Repo.get!(id) |> Repo.preload([:team_definition, :run_tasks, :run_logs], in_parallel: false)
   end
 
   # --- Run Tasks ---

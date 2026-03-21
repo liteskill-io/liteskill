@@ -161,6 +161,7 @@ defmodule Liteskill.Chat.StreamRegistry do
           e in [
             Ecto.NoResultsError,
             DBConnection.ConnectionError,
+            DBConnection.OwnershipError,
             Ecto.ConstraintError,
             Ecto.StaleEntryError,
             Ecto.InvalidChangesetError

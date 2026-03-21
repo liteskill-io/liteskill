@@ -40,7 +40,7 @@ if [ ! -d "$RELEASE_DIR" ]; then
 fi
 
 log "Checking NIFs in release: $RELEASE_DIR"
-check_nif "mdex" "libcomrak_nif*.dll"
+check_nif "mdex" "*comrak_nif*.dll"
 check_nif "lumis" "lumis_nif*.dll"
 check_nif "exqlite" "sqlite3_nif.dll"
 check_nif "argon2_elixir" "argon2_nif.dll"
