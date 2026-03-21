@@ -176,6 +176,12 @@ case "$TRIPLE" in
     # deb+rpm here and create the AppImage manually in Phase 6.
     cargo tauri build --bundles deb,rpm
     ;;
+  *-apple-darwin)
+    # Skip Tauri's built-in DMG bundling — its bundle_dmg.sh (create-dmg
+    # fork) fails on GitHub Actions runners. We build the .app bundle here
+    # and create the DMG manually with hdiutil in Phase 6.
+    cargo tauri build --bundles app
+    ;;
   *)
     cargo tauri build
     ;;

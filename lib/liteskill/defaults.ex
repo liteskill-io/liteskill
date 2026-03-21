@@ -19,26 +19,23 @@ defmodule Liteskill.Defaults do
   """
   @spec data_dir() :: String.t()
   def data_dir do
+    # coveralls-ignore-start — each branch only reachable on its own OS
     case :os.type() do
       {:unix, :darwin} ->
         Path.join(home(), "Library/Application Support/Liteskill")
 
-      # coveralls-ignore-start — only reachable on Linux
       {:unix, _} ->
         xdg = System.get_env("XDG_DATA_HOME", Path.join(home(), ".local/share"))
         Path.join(xdg, "liteskill")
 
-      # coveralls-ignore-stop
-
-      # coveralls-ignore-start — only reachable on Windows
       {:win32, _} ->
         Path.join(
           System.get_env("APPDATA", "C:/Users/Default/AppData/Roaming"),
           "Liteskill"
         )
-
-        # coveralls-ignore-stop
     end
+
+    # coveralls-ignore-stop
   end
 
   @doc """

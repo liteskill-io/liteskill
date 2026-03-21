@@ -75,7 +75,7 @@ if System.get_env("CI") do
   config :wallaby,
     chromedriver: [
       capabilities: %{
-        "goog:chromeOptions": %{
+        chromeOptions: %{
           args: [
             "--no-sandbox",
             "--headless=new",
@@ -85,7 +85,7 @@ if System.get_env("CI") do
           ]
         },
         unhandledPromptBehavior: "accept",
-        "goog:loggingPrefs": %{browser: "DEBUG"}
+        loggingPrefs: %{browser: "DEBUG"}
       }
     ]
 end
