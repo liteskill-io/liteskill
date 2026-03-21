@@ -22,7 +22,7 @@ defmodule LiteskillWeb.E2E.SetupWizardTest do
       |> click(Query.button("Skip"))
 
       # Step 3: Providers — skip
-      |> assert_has(Query.css("h2", text: "Configure LLM Providers"))
+      |> assert_has(Query.css("h2", text: "AI Setup"))
       |> take_screenshot(name: "setup_wizard/skip_all_steps/03_providers_step")
       |> click(Query.button("Skip"))
 
@@ -68,7 +68,7 @@ defmodule LiteskillWeb.E2E.SetupWizardTest do
       |> click(Query.button("Skip"))
 
       # Providers step: click Manual Entry
-      |> assert_has(Query.css("h2", text: "Configure LLM Providers"))
+      |> assert_has(Query.css("h2", text: "AI Setup"))
       |> click(Query.button("Manual Entry"))
       |> take_screenshot(name: "setup_wizard/create_provider_and_model/provider_manual_entry")
 
